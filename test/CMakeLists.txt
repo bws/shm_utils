@@ -17,7 +17,7 @@ ${CMAKE_CURRENT_SOURCE_DIR}/shm_vector_test.cc
 
 target_link_libraries(
   shm_test
-  shmvector
+  shmutils
   rt
   GTest::gtest_main
 )

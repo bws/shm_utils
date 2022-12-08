@@ -250,19 +250,80 @@ TEST(shmvector, shared_insert_at_past) {
 
 /* Test insertion of an element that already exists */
 TEST(shmvector, shared_insert_at_over) {
+	int rc1;
+	char ele;
+	shmvector_t sv;
+	shmvector_create(&sv, "/shmvector-shared_insert_at_past", sizeof(char), 10);
+
+	ele = 'a';
+	rc1 = shmvector_push_back(&sv, &ele);
+	EXPECT_EQ(0, rc1);
+	EXPECT_EQ('a', *((char*)shmvector_at(&sv, 0)));
+
+	ele = 'b';
+	rc1 = shmvector_insert_at(&sv, 0, &ele);
+	EXPECT_EQ(0, rc1);
+	EXPECT_EQ('b', *((char*)shmvector_at(&sv, 0)));
+
+	ele = 'c';
+	rc1 = shmvector_push_back(&sv, &ele);
+	EXPECT_EQ(1, rc1);
+	EXPECT_EQ('c', *((char*)shmvector_at(&sv, 1)));
+	
+	shmvector_destroy(&sv);
 }
 
 /* Allocate a vector and confirm insert_quick will push back */
 TEST(shmvector, shared_insert_quick_not_full) {
+	int rc1;
+	char ele;
+	shmvector_t sv;
+	shmvector_create(&sv, "/shmvector-shared_insert_quick_not_full", sizeof(char), 10);
+
+	ele = 'a';
+	rc1 = shmvector_insert_quick(&sv, &ele);
+	EXPECT_EQ(0, rc1);
+	EXPECT_EQ('a', *((char*)shmvector_at(&sv, 0)));
+
+	ele = 'b';
+	rc1 = shmvector_insert_quick(&sv, &ele);
+	EXPECT_EQ(1, rc1);
+	EXPECT_EQ('b', *((char*)shmvector_at(&sv, 1)));
+
+	shmvector_destroy(&sv);
 }
 
-/* Allocate a vector and confirm insert_quick will push back */
+/* Allocate a vector and confirm insert_quick will find an empty location */
 TEST(shmvector, shared_insert_quick_is_full) {
+	int rc1;
+	char ele;
+	shmvector_t sv;
+	shmvector_create(&sv, "/shmvector-shared_insert_quick_is_full", sizeof(char), 4);
+
+	// Fill the entire vector
+	ele = 'a';
+	rc1 = shmvector_push_back(&sv, &(ele));
+	ele = 'b';
+	rc1 = shmvector_push_back(&sv, &(ele));
+	ele = 'c';
+	rc1 = shmvector_push_back(&sv, &(ele));
+	ele = 'd';
+	rc1 = shmvector_push_back(&sv, &(ele));
+	EXPECT_EQ('a', *((char*)shmvector_at(&sv, 0)));
+	EXPECT_EQ('b', *((char*)shmvector_at(&sv, 1)));
+	EXPECT_EQ('c', *((char*)shmvector_at(&sv, 2)));
+	EXPECT_EQ('d', *((char*)shmvector_at(&sv, 3)));
+
+	// Delete an element
+	rc1 = shmvector_del(&sv, 2);
+	EXPECT_EQ(0, rc1);
+
+	// Perform a insert_quick into the avilable hole
+	ele = 'z';
+	rc1 = shmvector_insert_quick(&sv, &ele);
+	EXPECT_EQ(2, rc1);
+
+	shmvector_destroy(&sv);
 }
 
-/* Allocate the same vector 3x to confirm push_back values are shared */
-TEST(shmvector, shared_at) {
-}
-/* Allocate the same vector 3x to confirm push_back values are shared */
-TEST(shmvector, shared_insert_at) {
-}
+

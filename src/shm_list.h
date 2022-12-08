@@ -16,6 +16,7 @@
 #define SHM_LIST_H
 
 #include <stdbool.h>
+#include <stddef.h>
 #include "shm_vector.h"
 
 #ifdef __cplusplus

@@ -102,11 +102,8 @@ int shmvector_safe_push_back(shmvector_t* sv, void* ele) {
 
 /** Add an element to the array */
 int shmvector_push_back(shmvector_t* sv, void* ele) {
-	int idx;
-	if (sv->shm->next_back_idx == sv->shm->capacity) {
-		idx = -1;
-    }
-    else {
+	int idx = -1;
+	if (sv->shm->next_back_idx < sv->shm->capacity) {
 		void* buf_offset = sv->shm->eles + (sv->shm->esize * sv->shm->next_back_idx);
 		buf_offset = memcpy(buf_offset, ele, sv->shm->esize);
         idx = sv->shm->next_back_idx;
@@ -160,18 +157,30 @@ int shmvector_insert_quick(shmvector_t* sv, void* ele) {
     int idx = -1;
     /* If the vector has space find a location to insert this element */
     if (sv->shm->active_count < sv->shm->capacity) {
-        shmvector_push_back(sv, ele);
+        idx = shmvector_push_back(sv, ele);
         if (-1 == idx) {
             /* Push_back failed so search for an entry not marked active */
             for (int i = 0; i < sv->shm->capacity; i++) {
                 if (!(sv->shm->actives[i])) {
-                    // copy data
+                    int rc = shmvector_insert_at(sv, i, ele);
+                    idx = i;
                     break;
                 }
             }
         }
     }
     return idx;
+}
+
+/* If the element at idx exists, mark it available */
+int shmvector_del(shmvector_t* sv, size_t idx) {
+    int rc = -1;
+    if (sv->shm->actives[idx]) {
+        sv->shm->actives[idx] = false;
+        sv->shm->active_count --;
+        rc = 0;
+    }
+    return rc;
 }
 
 /* Double the size of the shmarray and copy data as needed */

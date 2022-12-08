@@ -89,6 +89,7 @@ int shmmutex_unlock(shmmutex_t *sm) {
     long s;
     const uint32_t taken = SHMMUTEX_LOCK_TAKEN;
     if (atomic_compare_exchange_strong(&(sm->val), &taken, SHMMUTEX_LOCK_AVAILABLE)) {
+        /* We released the futex, notify processes that may be sleep-waiting */
         s = futex(&sm->val, FUTEX_WAKE, SHMMUTEX_LOCK_AVAILABLE, NULL, NULL, 0);
         if (s  == -1) {
             fprintf(stderr, "ERROR: Failure while release lock\n");

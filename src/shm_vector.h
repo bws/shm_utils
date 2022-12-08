@@ -108,6 +108,13 @@ void* shmvector_at(shmvector_t* sv, size_t idx);
 int shmvector_insert_quick(shmvector_t* sv, void* ele);
 
 /**
+ * Insert an element into the first location found by a simple search
+ * @return the index of the inserted element
+*/
+int shmvector_del(shmvector_t* sv, size_t idx);
+
+
+/**
  * Double the size of the shared vector
 */
 //int shmvector_grow_array(shmvector_t *sv);
