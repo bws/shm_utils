@@ -39,7 +39,7 @@ int shmvector_create(shmvector_t *sv, const char* segname, size_t elesz, size_t 
             rc = 1;
         }
 
-        /* Critical section - ensure mutex creation elsewhere is complete */
+        /* Critical section - lock/unlock to ensure mutex creation is complete */
         shmmutex_lock(&(sv->shm->lock));
         shmmutex_unlock(&(sv->shm->lock));
         munmap(sv->shm, sizeof(shmmutex_t));
@@ -69,7 +69,7 @@ int shmvector_create(shmvector_t *sv, const char* segname, size_t elesz, size_t 
             sv->shm->eles = (void*)(sv->shm + 1);
             sv->shm->actives = (void*)sv->shm->eles + ((sz + 1) * elesz);
 
-            /* Create the mutex to unblock other processes */
+            /* Create the mutex as the last step to unblock other processes */
             shmmutex_create(&sv->shm->lock);
         } else {
             close(sv->segd);

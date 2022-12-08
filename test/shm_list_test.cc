@@ -4,6 +4,10 @@
 
 /* Test empty creation */
 TEST(shmlist, empty_creation) {
+    shmlist_t sl1;
+    shmlist_create(&sl1, "shmlist-empty_creation", 0, 0);
+    shmlist_t sl2;
+    shmlist_create(&sl2, "shmlist-empty_creation", 0, 0);
 }
 
 /* Test basic destruction */

@@ -318,7 +318,7 @@ TEST(shmvector, shared_insert_quick_is_full) {
 	rc1 = shmvector_del(&sv, 2);
 	EXPECT_EQ(0, rc1);
 
-	// Perform a insert_quick into the avilable hole
+	// Perform a insert_quick into the available hole
 	ele = 'z';
 	rc1 = shmvector_insert_quick(&sv, &ele);
 	EXPECT_EQ(2, rc1);

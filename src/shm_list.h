@@ -38,6 +38,10 @@ typedef struct shmlist {
 
 	/* A shared memory vector to store data */
 	shmvector_t* v;
+
+	/* Index within the vector that stores data for this node */
+	size_t idx;
+
 } shmlist_t;
 
 

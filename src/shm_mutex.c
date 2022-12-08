@@ -22,9 +22,8 @@
  * @param val3 ???
 */
 static int futex(uint32_t *uaddr, int op, uint32_t val,
-          const struct timespec *timeout, uint32_t *uaddr2, uint32_t val3) {
-           return syscall(SYS_futex, uaddr, op, val,
-                          timeout, uaddr2, val3);
+                 const struct timespec *timeout, uint32_t *uaddr2, uint32_t val3) {
+    return syscall(SYS_futex, uaddr, op, val, timeout, uaddr2, val3);
 }
 
 /* Create the mutex variable and make it available. Called from 1 process only. */
