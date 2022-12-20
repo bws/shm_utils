@@ -31,8 +31,9 @@ int shmvector_create(shmvector_t *sv, const char* segname, size_t elesz, size_t 
             rbytes = pread(sv->segd, &tmp, sizeof(shmmutex_t), offsetof(shmarray_t, lock));
         }
 
-        /* MMap and lock the shared mutex */
-        sv->shm = mmap(0, sizeof(shmmutex_t), PROT_READ|PROT_WRITE, MAP_SHARED, sv->segd, 0);
+        /* MMap the lock to determine if shm initialization has completed */
+        sv->shm = mmap(offsetof(shmarray_t, lock), sizeof(shmmutex_t), 
+                                PROT_READ|PROT_WRITE, MAP_SHARED, sv->segd, 0);
         if (sv->shm == MAP_FAILED) {
             fprintf(stderr, "ERROR: MMap to acquire lock failed\n");
             close(sv->segd);
@@ -45,8 +46,11 @@ int shmvector_create(shmvector_t *sv, const char* segname, size_t elesz, size_t 
         munmap(sv->shm, sizeof(shmmutex_t));
 
         /* Setup local pointers into shared memory space */
-        rbytes = pread(sv->segd, &capacity, sizeof(size_t), offsetof(shmarray_t, capacity));
-        rbytes = pread(sv->segd, &elesize, sizeof(size_t), offsetof(shmarray_t, esize));
+        rbytes = 0;
+        while (rbytes < (sizeof(size_t) * 2)) {
+            rbytes = pread(sv->segd, &capacity, sizeof(size_t), offsetof(shmarray_t, capacity));
+            rbytes += pread(sv->segd, &elesize, sizeof(size_t), offsetof(shmarray_t, esize));
+        }
         segsize = sizeof(shmarray_t) + (capacity * elesize) + (capacity * sizeof(bool));
         sv->shm = mmap(0, segsize, PROT_READ|PROT_WRITE, MAP_SHARED, sv->segd, 0);    
         if (sv->shm == MAP_FAILED) {
@@ -58,6 +62,7 @@ int shmvector_create(shmvector_t *sv, const char* segname, size_t elesz, size_t 
     else {
         /* Initialize the shared memory segement */
         size_t segsize = sizeof(shmarray_t) + (sz * elesz) + (sz * sizeof(bool));
+        /* Don't need to check the ftruncate, because mmap fails if ftruncate failed */
         ftruncate(sv->segd, segsize);
         sv->shm = mmap(0, segsize, PROT_READ|PROT_WRITE, MAP_SHARED, sv->segd, 0);
         if (sv->shm != MAP_FAILED) {
@@ -89,6 +94,28 @@ int shmvector_destroy(shmvector_t *sv) {
     shm_unlink(sv->segname);
     close(sv->segd);
     munmap(sv->shm, segsize);
+}
+
+/** Return the number of active elements */
+size_t shmvector_size(shmvector_t *sv) { 
+    return sv->shm->active_count; 
+}
+
+/** Return the element if found, or size+1 if not found */
+size_t shmvector_find_first_of(shmvector_t *sv, void* data, shmvector_elecmp_fn elecmp) {
+    /* Search for an entry not marked active */
+    size_t last_active_idx = 0;
+    for (int i = 0; i < sv->shm->capacity; i++) {
+        //fprintf(stderr, "i %d act %d add %p\n", i, sv->shm->actives[i], sv->shm->eles + i);
+        if (sv->shm->actives[i]) {
+            last_active_idx = i+1;
+            if (0 == elecmp(data, sv->shm->eles + i)) {
+                last_active_idx = i;
+                break;
+            }
+        }
+    }
+    return last_active_idx;   
 }
 
 /** Add an element to the array with thread-safety */
@@ -125,7 +152,7 @@ int shmvector_insert_at(shmvector_t* sv, size_t idx, void* ele) {
 		    sv->shm->actives[idx] = true;
 		    sv->shm->active_count++;
         }
-        if (idx > sv->shm->next_back_idx) {
+        if (idx >= sv->shm->next_back_idx) {
             sv->shm->next_back_idx = idx + 1;
         }
         rc = idx;
@@ -153,17 +180,24 @@ void* shmvector_at(shmvector_t* sv, size_t idx) {
 
 
 /* Perform a push back if possible, otherwise search for an empty slot */
-int shmvector_insert_quick(shmvector_t* sv, void* ele) {
+int shmvector_insert_quick(shmvector_t* sv) {
     int idx = -1;
     /* If the vector has space find a location to insert this element */
     if (sv->shm->active_count < sv->shm->capacity) {
-        idx = shmvector_push_back(sv, ele);
-        if (-1 == idx) {
-            /* Push_back failed so search for an entry not marked active */
+        /* If space is avilable at the back of the list, use that */
+        if (sv->shm->next_back_idx < sv->shm->capacity) {
+            idx = sv->shm->next_back_idx;
+            sv->shm->actives[sv->shm->next_back_idx] = true;
+            sv->shm->next_back_idx++;
+            sv->shm->active_count++;
+        }
+        else {
+            /* back insertion failed so search for an entry not marked active */
             for (int i = 0; i < sv->shm->capacity; i++) {
                 if (!(sv->shm->actives[i])) {
-                    int rc = shmvector_insert_at(sv, i, ele);
                     idx = i;
+                    sv->shm->actives[i] = true;
+                    sv->shm->active_count++;
                     break;
                 }
             }
@@ -191,5 +225,5 @@ int shmvector_grow_array(shmvector_t *sv) {
 	    newsz = sv->shm->capacity * 2;
     }
     /* Not yet implemented */
-	return rc;
+	return -1;
 }

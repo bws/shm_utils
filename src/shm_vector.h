@@ -19,6 +19,12 @@
 extern "C" {
 #endif
 
+/** 
+ * Functor used to compare elements for find algorithms 
+ * @return 0 on equality, 1 on non-equality
+ */
+typedef int (*shmvector_elecmp_fn)(void* lhs, void* rhs);
+
 /* Private type for creating an array with holes in shared memory */
 typedef struct shmarray shmarray_t;
 
@@ -73,6 +79,17 @@ int shmvector_create(shmvector_t *sv, const char* segname, size_t elesz, size_t 
 int shmvector_destroy(shmvector_t *sv);
 
 /**
+ * @return the number of active elements in the vector
+ */
+size_t shmvector_size(shmvector_t *sv);
+
+/**
+ * @return the index of the element compares equal,
+ *         or size+1 if the element does not exist
+ */
+size_t shmvector_find_first_of(shmvector_t *sv, void *data, shmvector_elecmp_fn elecmp);
+
+/**
  * Concurrent safe push_back() function
  * 
  * @return the index to which ele is copied
@@ -102,14 +119,14 @@ void* shmvector_safe_at(shmvector_t* sv, size_t idx);
 void* shmvector_at(shmvector_t* sv, size_t idx);
 
 /**
- * Insert an element into the first location found by a simple search
- * @return the index of the inserted element
+ * Allocate an element at the first location found by a simple search
+ * @return a pointer to the allocated element
 */
-int shmvector_insert_quick(shmvector_t* sv, void* ele);
+int shmvector_insert_quick(shmvector_t* sv);
 
 /**
- * Insert an element into the first location found by a simple search
- * @return the index of the inserted element
+ * Delete element at index idx
+ * @return 0 on success, non-zero on failure
 */
 int shmvector_del(shmvector_t* sv, size_t idx);
 

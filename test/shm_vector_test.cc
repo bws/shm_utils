@@ -280,15 +280,13 @@ TEST(shmvector, shared_insert_quick_not_full) {
 	shmvector_t sv;
 	shmvector_create(&sv, "/shmvector-shared_insert_quick_not_full", sizeof(char), 10);
 
-	ele = 'a';
-	rc1 = shmvector_insert_quick(&sv, &ele);
-	EXPECT_EQ(0, rc1);
-	EXPECT_EQ('a', *((char*)shmvector_at(&sv, 0)));
+	int idx = shmvector_insert_quick(&sv);
+	EXPECT_EQ(0, idx);
+	EXPECT_EQ(1, shmvector_size(&sv));
 
-	ele = 'b';
-	rc1 = shmvector_insert_quick(&sv, &ele);
-	EXPECT_EQ(1, rc1);
-	EXPECT_EQ('b', *((char*)shmvector_at(&sv, 1)));
+	idx = shmvector_insert_quick(&sv);
+	EXPECT_EQ(1, idx);
+	EXPECT_EQ(2, shmvector_size(&sv));
 
 	shmvector_destroy(&sv);
 }
@@ -320,10 +318,50 @@ TEST(shmvector, shared_insert_quick_is_full) {
 
 	// Perform a insert_quick into the available hole
 	ele = 'z';
-	rc1 = shmvector_insert_quick(&sv, &ele);
+	rc1 = shmvector_insert_quick(&sv);
 	EXPECT_EQ(2, rc1);
 
 	shmvector_destroy(&sv);
 }
+
+static int test_charcmp(void* l, void* r) {
+	char lhs = ((char*)(l))[0];
+	char rhs = ((char*)(r))[0];
+	fprintf(stderr, "Comparing lhs: %c rhs: %c\n", lhs, rhs);
+	if (lhs == rhs)
+		return 0;
+	else
+		return 1;
+}
+
+TEST(shmvector, basic_find_first_of) {
+	int rc1;
+	shmvector_t sv;
+	shmvector_create(&sv, "/shmvector-basic-find_first_of", sizeof(char), 4);
+
+	// Fill the entire vector
+	char ele0 = 'a';
+	rc1 = shmvector_push_back(&sv, &(ele0));
+	char ele1 = 'b';
+	rc1 = shmvector_push_back(&sv, &(ele1));
+	char ele2 = 'c';
+	rc1 = shmvector_push_back(&sv, &(ele2));
+	char ele3 = 'd';
+	rc1 = shmvector_push_back(&sv, &(ele3));
+
+	// Use find to find existing elements
+	EXPECT_EQ(0, shmvector_find_first_of(&sv, &ele0, test_charcmp));
+	EXPECT_EQ(1, shmvector_find_first_of(&sv, &ele1, test_charcmp));
+	EXPECT_EQ(2, shmvector_find_first_of(&sv, &ele2, test_charcmp));
+	EXPECT_EQ(3, shmvector_find_first_of(&sv, &ele3, test_charcmp));
+
+	// A non-existant element should come back as last_idx + 1
+	char nonele = 'f';
+	EXPECT_EQ(4, shmvector_find_first_of(&sv, &nonele, test_charcmp));
+
+	shmvector_destroy(&sv);
+}
+
+
 
 

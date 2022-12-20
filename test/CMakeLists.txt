@@ -11,6 +11,7 @@ add_executable(shm_test
 )
 
 target_sources(shm_test PRIVATE
+${CMAKE_CURRENT_SOURCE_DIR}/shm_counter_test.cc
 ${CMAKE_CURRENT_SOURCE_DIR}/shm_list_test.cc
 ${CMAKE_CURRENT_SOURCE_DIR}/shm_vector_test.cc
 )
