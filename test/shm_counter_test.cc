@@ -30,11 +30,20 @@ TEST(shmcounter, simple_creation) {
 /* Test basic destruction */
 TEST(shmcounter, basic_destroy) {
 
+    // Create a counter and destroy
     shmcounter_uid_t id1 = {0};
-    shmcounter_t sl1;
-    shmcounter_create(&sl1, "shmcounter-basic_destroy", id1);
-    shmcounter_destroy(&sl1);
-    EXPECT_EQ(0, 0);
+    shmcounter_t sc1;
+    shmcounter_create(&sc1, "shmcounter-basic_destroy", id1);
+    EXPECT_EQ(true, shmcounter_isequal(&sc1, 0));
+    shmcounter_inc_safe(&sc1, 1);
+    EXPECT_EQ(true, shmcounter_isequal(&sc1, 1));
+    shmcounter_destroy(&sc1);
+
+    // Create a new counter with the same name and id, and ensure the counter is 0
+    shmcounter_t sc2;
+    shmcounter_create(&sc2, "shmcounter-basic_destroy", id1);
+    EXPECT_EQ(true, shmcounter_isequal(&sc2, 0));
+    shmcounter_destroy(&sc2);
 }
 
 /* Test increment */
@@ -66,5 +75,7 @@ TEST(shmcounter, basic_isequal) {
     EXPECT_EQ(true, shmcounter_isequal(&sc1, 2));
     EXPECT_EQ(true, shmcounter_isequal(&sc1_copy, 2));
 
+    shmcounter_destroy(&sc1);
+    shmcounter_destroy(&sc1_copy);
 }
 

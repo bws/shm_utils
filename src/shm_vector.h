@@ -74,7 +74,7 @@ typedef struct shmarray {
 int shmvector_create(shmvector_t *sv, const char* segname, size_t elesz, size_t sz);
 
 /**
- * Release resources associated with this shared memory vector
+ * Release resources associated with this shared memory vector. Can be safely called once.
 */
 int shmvector_destroy(shmvector_t *sv);
 

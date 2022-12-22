@@ -15,14 +15,19 @@
 
 #include <stdbool.h>
 #include <stddef.h>
+#include "shm_mutex.h"
 #include "shm_vector.h"
-
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 /** Number of counters allowed within a set */
 #define SHMCOUNTER_SET_SIZE 1024
+
+/** Reserved values that cannot be used within the UID */
+#define SHMCOUNTER_RESERVED_GROUP 0xDEADBEEF
+#define SHMCOUNTER_RESERVED_CTYPE 0xDEADBEEF
+#define SHMCOUNTER_RESERVED_TAG 0xDEADBEEF
 
 /** A counter id with sufficient width to uniquely match MPI collectives */
 typedef struct shmcounter_uid {
@@ -36,7 +41,16 @@ typedef struct shmcounter_uid {
 
 /** The data stored within the shared storage for this counter */
 typedef struct shmcounter_data {
+    /* Mutex for this counter */
+    shmmutex_t mutex;
+
+    /* Unique id for this counter */
     shmcounter_uid_t id;
+
+    /* Number of active reader/writers for this counter */
+    size_t refcount;
+
+    /* Value of this counter*/
     int count;
 } shmcounter_data_t;
 
@@ -51,7 +65,6 @@ typedef struct shmcounter {
 
 } shmcounter_t;
 
-
 /**
 	Create and allocate a new shared counter. Initialize it to 0.
 	@param sc Struct to fill in
@@ -59,7 +72,7 @@ typedef struct shmcounter {
 int shmcounter_create(shmcounter_t *sc, const char* counterset, shmcounter_uid_t cid);
 
 /**
- * Release resources associated with this shared memory list
+ * Release resources associated with this shared memory counter.
  * @param sc Counter struct
 */
 int shmcounter_destroy(shmcounter_t *sc);

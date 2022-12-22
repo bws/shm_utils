@@ -49,9 +49,7 @@ typedef struct shmmutex {
 int shmmutex_create(shmmutex_t *sm);
 
 /**
- * Destroy the mutex. The mutex must be stored in memory visible from
- * every process that uses the mutex AND the create call must
- * only be called by a single process.
+ * Destroy the mutex. The shared mutex cannot be used by anyone after this call.
  * 
  * @param sm pointer to the mutex data
  * @return 0 on success
