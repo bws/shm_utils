@@ -96,6 +96,29 @@ int shmvector_destroy(shmvector_t *sv) {
     munmap(sv->shm, segsize);
 }
 
+int shmvector_destroy_safe(shmvector_t *sv) {
+    /* Take the lock */
+    shmmutex_lock(&(sv->shm->lock));
+
+    if (0 == shmvector_size(sv)) {
+        /* FIXME: Disable the lock */
+        //shmmutex_destroy(&sv->shm->lock);
+
+        /* Free resources */
+        shm_unlink(sv->segname);
+    }
+    //else {
+        /* Vector still contains data, just clean up locally */
+       shmmutex_unlock(&(sv->shm->lock));
+    //}
+
+    /* Perform local cleanup */
+    size_t segsize = sizeof(shmarray_t) + (sv->shm->capacity * sv->shm->esize) + 
+        (sv->shm->capacity * sizeof(bool));
+    close(sv->segd);
+    munmap(sv->shm, segsize);
+}
+
 /** Return the number of active elements */
 size_t shmvector_size(shmvector_t *sv) { 
     return sv->shm->active_count; 
@@ -107,9 +130,10 @@ size_t shmvector_find_first_of(shmvector_t *sv, void* data, shmvector_elecmp_fn 
     size_t last_active_idx = 0;
     for (int i = 0; i < sv->shm->capacity; i++) {
         //fprintf(stderr, "i %d act %d add %p\n", i, sv->shm->actives[i], sv->shm->eles + i);
-        if (sv->shm->actives[i]) {
+        if (true == sv->shm->actives[i]) {
+            fprintf(stderr, "Exaining active i %d act %d add %p\n", i, sv->shm->actives[i], sv->shm->eles + i*sv->shm->esize);
             last_active_idx = i+1;
-            if (0 == elecmp(data, sv->shm->eles + i)) {
+            if (0 == elecmp(data, sv->shm->eles + (i * sv->shm->esize))) {
                 last_active_idx = i;
                 break;
             }
@@ -160,7 +184,7 @@ int shmvector_insert_at(shmvector_t* sv, size_t idx, void* ele) {
 	return rc;
 }
 
-/** Return the element at idx with thread-safety*/
+/** Return a pointer to the element at idx with thread-safety*/
 void* shmvector_safe_at(shmvector_t* sv, size_t idx) {
 	void *val;
     shmmutex_lock(&sv->shm->lock);
@@ -169,7 +193,7 @@ void* shmvector_safe_at(shmvector_t* sv, size_t idx) {
 	return val;
 }
 
-/** Return the element at idx */
+/** Return a pointer to the element at idx */
 void* shmvector_at(shmvector_t* sv, size_t idx) {
 	void *val = 0;
 	if (sv->shm->next_back_idx > idx && true == sv->shm->actives[idx]) {

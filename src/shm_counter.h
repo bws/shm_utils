@@ -54,22 +54,41 @@ typedef struct shmcounter_data {
     int count;
 } shmcounter_data_t;
 
-/** Public type for creating a shared counter */
-typedef struct shmcounter {
-
+/** Public type for creating a set of shared counters */
+typedef struct shmcounter_set {
 	/* A shared memory vector to store data */
 	shmvector_t* v;
 
+} shmcounter_set_t;
+
+/** Public type for creating a shared counter */
+typedef struct shmcounter {
+    /* The counter set this counter belongs to */
+    shmcounter_set_t *set;
+    
     /* Index of the vector where the counter value is stored */
     size_t idx;
 
 } shmcounter_t;
 
+
 /**
 	Create and allocate a new shared counter. Initialize it to 0.
 	@param sc Struct to fill in
 */
-int shmcounter_create(shmcounter_t *sc, const char* counterset, shmcounter_uid_t cid);
+int shmcounter_set_create(shmcounter_set_t *scs, const char* counterset);
+
+/**
+ * Release resources associated with this shared memory counter.
+ * @param sc Counter struct
+*/
+int shmcounter_set_destroy(shmcounter_set_t *scs);
+
+/**
+	Create and allocate a new shared counter. Initialize it to 0.
+	@param sc Struct to fill in
+*/
+int shmcounter_create(shmcounter_t *sc, shmcounter_set_t *scs, shmcounter_uid_t cid);
 
 /**
  * Release resources associated with this shared memory counter.

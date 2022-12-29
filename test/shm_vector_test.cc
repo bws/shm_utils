@@ -334,10 +334,10 @@ static int test_charcmp(void* l, void* r) {
 		return 1;
 }
 
-TEST(shmvector, basic_find_first_of) {
+TEST(shmvector, find_first_of_basic) {
 	int rc1;
 	shmvector_t sv;
-	shmvector_create(&sv, "/shmvector-basic-find_first_of", sizeof(char), 4);
+	shmvector_create(&sv, "/shmvector_find_first_of_basic", sizeof(char), 4);
 
 	// Fill the entire vector
 	char ele0 = 'a';
@@ -358,6 +358,48 @@ TEST(shmvector, basic_find_first_of) {
 	// A non-existant element should come back as last_idx + 1
 	char nonele = 'f';
 	EXPECT_EQ(4, shmvector_find_first_of(&sv, &nonele, test_charcmp));
+
+	shmvector_destroy(&sv);
+}
+
+static int test_dblcmp(void* l, void* r) {
+	double* lhs = ((double*)(l));
+	double* rhs = ((double*)(r));
+	fprintf(stderr, "Comparing lhs: %f rhs: %f\n", *lhs, *rhs);
+	if (*lhs == *rhs) {
+		fprintf(stderr, "They're equal\n");
+		return 0;
+	}
+	else {
+		fprintf(stderr, "They're NOT equal\n");
+		return 1;
+	}
+}
+
+TEST(shmvector, find_first_of_double) {
+	int rc1;
+	shmvector_t sv;
+	shmvector_create(&sv, "/shmvector_find_first_of_double", sizeof(double), 8);
+
+	// Fill the entire vector
+	double ele0 = 0.123;
+	rc1 = shmvector_push_back(&sv, &(ele0));
+	double ele1 = 2.345;
+	rc1 = shmvector_push_back(&sv, &(ele1));
+	double ele2 = 34.567;
+	rc1 = shmvector_push_back(&sv, &(ele2));
+	double ele3 = 456.789;
+	rc1 = shmvector_push_back(&sv, &(ele3));
+
+	// Use find to find existing elements
+	EXPECT_EQ(0, shmvector_find_first_of(&sv, &ele0, test_dblcmp));
+	EXPECT_EQ(1, shmvector_find_first_of(&sv, &ele1, test_dblcmp));
+	EXPECT_EQ(2, shmvector_find_first_of(&sv, &ele2, test_dblcmp));
+	EXPECT_EQ(3, shmvector_find_first_of(&sv, &ele3, test_dblcmp));
+
+	// A non-existant element should come back as last_idx + 1
+	double nonele = 999.999;
+	EXPECT_EQ(4, shmvector_find_first_of(&sv, &nonele, test_dblcmp));
 
 	shmvector_destroy(&sv);
 }

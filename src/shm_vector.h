@@ -79,6 +79,12 @@ int shmvector_create(shmvector_t *sv, const char* segname, size_t elesz, size_t 
 int shmvector_destroy(shmvector_t *sv);
 
 /**
+ * Release resources associated with this shared memory vector if the vector is empty. 
+ * Can be safely called by all callers.
+*/
+int shmvector_destroy_safe(shmvector_t *sv);
+
+/**
  * @return the number of active elements in the vector
  */
 size_t shmvector_size(shmvector_t *sv);
