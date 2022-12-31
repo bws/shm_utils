@@ -10,8 +10,8 @@
  *     fprintf(stdout, "Counter is 0\n");
  *   shmcounter_destroy(&sc);
  */
-#ifndef SHM_LIST_H
-#define SHM_LIST_H
+#ifndef SHM_COUNTER_H
+#define SHM_COUNTER_H
 
 #include <stdbool.h>
 #include <stddef.h>

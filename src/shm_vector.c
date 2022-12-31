@@ -131,7 +131,7 @@ size_t shmvector_find_first_of(shmvector_t *sv, void* data, shmvector_elecmp_fn 
     for (int i = 0; i < sv->shm->capacity; i++) {
         //fprintf(stderr, "i %d act %d add %p\n", i, sv->shm->actives[i], sv->shm->eles + i);
         if (true == sv->shm->actives[i]) {
-            fprintf(stderr, "Exaining active i %d act %d add %p\n", i, sv->shm->actives[i], sv->shm->eles + i*sv->shm->esize);
+            fprintf(stderr, "Examining active i %d act %d add %p\n", i, sv->shm->actives[i], sv->shm->eles + i*sv->shm->esize);
             last_active_idx = i+1;
             if (0 == elecmp(data, sv->shm->eles + (i * sv->shm->esize))) {
                 last_active_idx = i;

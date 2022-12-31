@@ -145,6 +145,15 @@ void shmcounter_dec_safe(shmcounter_t* sc, int val) {
 	shmmutex_lock(&(d->mutex));
 	d->count -= val;
 	shmmutex_unlock(&(d->mutex));
+
+	/* End vector critical section */
+	shmmutex_unlock(&(sc->set->v->shm->lock));
+}
+
+/** return the value of the counter */
+int shmcounter_value(shmcounter_t* sc) {
+	shmcounter_data_t *d = shmvector_at(sc->set->v, sc->idx);
+	return (d->count);
 }
 
 /** Compare the value of the counter */

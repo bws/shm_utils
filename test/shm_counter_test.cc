@@ -90,10 +90,64 @@ TEST(shmcounter, destroy_basic) {
 
 /* Test increment */
 TEST(shmcounter, inc_basic) {
+
+    shmcounter_set_t scs;
+    int rc = shmcounter_set_create(&scs, "/shmcounter_isequal_basic");
+    EXPECT_EQ(0, rc);
+
+    shmcounter_uid_t id1 = {.group = 1, .ctype = 1, .tag = 1};
+    shmcounter_t sc1;
+    rc = shmcounter_create(&sc1, &scs, id1);
+    EXPECT_EQ(0, rc);
+    EXPECT_EQ(true, shmcounter_isequal(&sc1, 0));
+
+    shmcounter_t sc1_copy;
+    rc = shmcounter_create(&sc1_copy, &scs, id1);
+    EXPECT_EQ(0, rc);
+    EXPECT_EQ(true, shmcounter_isequal(&sc1_copy, 0));
+
+    shmcounter_inc_safe(&sc1, 1);
+    EXPECT_EQ(true, shmcounter_isequal(&sc1, 1));
+    EXPECT_EQ(true, shmcounter_isequal(&sc1_copy, 1));
+
+    shmcounter_inc_safe(&sc1_copy, 1);
+    EXPECT_EQ(true, shmcounter_isequal(&sc1, 2));
+    EXPECT_EQ(true, shmcounter_isequal(&sc1_copy, 2));
+
+    shmcounter_destroy(&sc1);
+    shmcounter_destroy(&sc1_copy);
+    shmcounter_set_destroy(&scs);
 }
 
 /* Test decrement */
 TEST(shmcounter, dec_basic) {
+
+    shmcounter_set_t scs;
+    int rc = shmcounter_set_create(&scs, "/shmcounter_isequal_basic");
+    EXPECT_EQ(0, rc);
+
+    shmcounter_uid_t id1 = {.group = 1, .ctype = 1, .tag = 1};
+    shmcounter_t sc1;
+    rc = shmcounter_create(&sc1, &scs, id1);
+    EXPECT_EQ(0, rc);
+    EXPECT_EQ(true, shmcounter_isequal(&sc1, 0));
+
+    shmcounter_t sc1_copy;
+    rc = shmcounter_create(&sc1_copy, &scs, id1);
+    EXPECT_EQ(0, rc);
+    EXPECT_EQ(true, shmcounter_isequal(&sc1_copy, 0));
+
+    shmcounter_dec_safe(&sc1, 1);
+    EXPECT_EQ(true, shmcounter_isequal(&sc1, -1));
+    EXPECT_EQ(true, shmcounter_isequal(&sc1_copy, -1));
+
+    shmcounter_dec_safe(&sc1_copy, 1);
+    EXPECT_EQ(true, shmcounter_isequal(&sc1, -2));
+    EXPECT_EQ(true, shmcounter_isequal(&sc1_copy, -2));
+
+    shmcounter_destroy(&sc1);
+    shmcounter_destroy(&sc1_copy);
+    shmcounter_set_destroy(&scs);
 }
 
 TEST(shmcounter, isequal_basic) {

@@ -45,11 +45,11 @@ typedef struct shmlist {
 	/* Index within the vector that stores data for this node */
 	size_t idx;
 
-	/* Pointer to just the element */
-	void* data;
-
 	/* A shared memory vector to store data */
 	shmvector_t* v;
+
+	/* Pointer to just the data element */
+	void* data;
 } shmlist_t;
 
 
@@ -68,22 +68,14 @@ int shmlist_create(shmlist_t *sl, const char* segname, size_t elesz, size_t sz);
 int shmlist_destroy(shmlist_t *sl);
 
 /**
- * Add a copy of ele to an available slot in sv
+ * @return 0 if a copy of ele was added to the list tail, otherwise non-zero
  */
 int shmlist_add_tail_safe(shmlist_t* sl, void* ele);
 
 /**
- * Delete ele from list
+ * @return 0 if element was deleted from list, otherwise non-zero
  */
 int shmlist_del_safe(shmlist_t* sl);
-
-/**
- * Iterate over members of the list, the user may invalidate the current entry.
- */
-#define shmlist_for_each_safe(sl, iter1, iter2) \
-    for (iter1 = ((sl == sl->list) ? sl->next : sl), iter2 = iter1->next; \
-         iter1 != sl->list; \
-         iter1 = iter2, iter2 = iter2->next)
 
 /**
  * @return true if the list is empty
@@ -100,11 +92,12 @@ int shmlist_extract_head_safe(shmlist_t *sl, void** head);
 /**
  * Remove matching element from list and return a local copy of the data
  * @return 0 if an element was matched and returned, non-zero if no match was found
- * @param sl List struct
- * @param match a locally allocated copy of match (caller must free this memory)
- * @param elecmp Element comparison function
+ * @param[in] sl List struct
+ * @param[in] value value to pass to lhs of comparison function
+ * @param[in] elecmp Element comparison function
+ * @param[out] ele a locally allocated copy of match (caller must free this memory)
  */
-int shmlist_extract_first_match_safe(shmlist_t *sl, void** match, shmlist_elecmp_fn elecmp);
+int shmlist_extract_first_match_safe(shmlist_t *sl, void *value, shmlist_elecmp_fn elecmp, void **ele);
 
 /**
  * @return the length of the list
@@ -122,12 +115,12 @@ shmlist_t* shmlist_head(shmlist_t *sl);
 shmlist_t* shmlist_next(shmlist_t *sl);
 
 /**
- * Insert a copy of ele after this list ptr
+ * @return a copy of ele after this list ptr
  */
 int shmlist_insert_after_safe(shmlist_t *sl, void* ele);
 
 /**
- * Insert a copy of ele before this list ptr
+ * @return 0 if a copy of ele was inserted before this list ptr, otherwise non-zero
  */
 int shmlist_insert_before_safe(shmlist_t *sl, void* ele);
 

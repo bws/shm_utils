@@ -77,26 +77,62 @@ TEST(shmlist, basic_del_safe) {
     EXPECT_EQ(0, 0);
 }
 
-TEST(shmlist, basic_shmlist_for_each_safe) {
-    shmlist_t sl1;
-    shmlist_create(&sl1, "shmlist-basic_shmlist_for_each_safe", sizeof(char), 1024);
+int basic_char_cmp(void* lhs, void* rhs) {
+    char* l = (char*)lhs;
+    char* r = (char*)rhs;
+    std::cerr << "lhs: " << l[0] << " rhs: " << r[0] << std::endl;
+    if (l[0] == r[0]) {
+        return 0;
+    }
+    return 1;
+}
+
+TEST(shmlist, extract_first_match_safe_basic) {
+    shmlist_t sl;
+    shmlist_create(&sl, "shmlist_extract_first_match_safe_basic", sizeof(char), 1024);
 
     // Prepopulate the list with 4 elements 
     char ele[5] = "abcd";
-    shmlist_add_tail_safe(&sl1, &ele[0]);
-    shmlist_add_tail_safe(&sl1, &ele[1]);
-    shmlist_add_tail_safe(&sl1, &ele[2]);
-    shmlist_add_tail_safe(&sl1, &ele[3]);
+    shmlist_add_tail_safe(&sl, &ele[0]);
+    shmlist_add_tail_safe(&sl, &ele[1]);
+    shmlist_add_tail_safe(&sl, &ele[2]);
+    shmlist_add_tail_safe(&sl, &ele[3]);
 
-    // Loop over the elements
-    //int i = 0;
-    //char* iter, iter2;
-    //shmlist_for_each_safe(&sl, iter, iter2, char) {
-    //    EXPECT_EQ(ele[i], iter[0]);
-    //    i++;
-   // }
+    /* Match the last element in the list */
+    char* item3;
+    int rc = shmlist_extract_first_match_safe(&sl, ele + 3, basic_char_cmp, (void**)&item3);
+    EXPECT_EQ(0, rc);
+    EXPECT_EQ(3, shmlist_length(&sl));
+    EXPECT_EQ(ele[0], ((char*)sl.list->next->data)[0]);
+    EXPECT_EQ(ele[1], ((char*)sl.list->next->next->data)[0]);
+    EXPECT_EQ(ele[2], ((char*)sl.list->next->next->next->data)[0]);
+    EXPECT_EQ(ele[3], item3[0]);
+    free(item3);
 
-    shmlist_destroy(&sl1);
+    /* Match the first element in the list */
+    char *item0;
+    rc = shmlist_extract_first_match_safe(&sl, ele + 0, basic_char_cmp, (void**)&item0);
+    EXPECT_EQ(0, rc);
+    EXPECT_EQ(2, shmlist_length(&sl));
+    EXPECT_EQ(ele[1], ((char*)sl.list->next->data)[0]);
+    EXPECT_EQ(ele[2], ((char*)sl.list->next->next->data)[0]);
+    EXPECT_EQ(ele[0], item0[0]);
+    free(item0);
+    
+    /* Match the remaining two elements in the list */
+    char *item1, *item2;
+    rc = shmlist_extract_first_match_safe(&sl, ele + 1, basic_char_cmp, (void**)&item1);
+    EXPECT_EQ(0, rc);
+    EXPECT_EQ(1, shmlist_length(&sl));
+    rc = shmlist_extract_first_match_safe(&sl, ele + 2, basic_char_cmp, (void**)&item2);
+    EXPECT_EQ(0, rc);
+    EXPECT_EQ(0, shmlist_length(&sl));
+    EXPECT_EQ(ele[1], item1[0]);
+    EXPECT_EQ(ele[2], item2[0]);
+    free(item1);
+    free(item2);
+    
+    shmlist_destroy(&sl);
 
 }
 

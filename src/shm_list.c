@@ -21,7 +21,18 @@ static void* shmlist_malloc_copy(shmlist_t* node) {
     size_t elesz = node->v->shm->esize - sizeof(shmlist_t);
     void* ele = malloc(elesz);
     if (NULL != ele) {
-        memcpy(ele, node->v->shm->eles + node->idx, elesz);
+        memcpy(ele, node->data, elesz);
+    }
+    return ele;
+}
+
+/* Allocate and fill the buffer with the element from the list node */
+static void* shmlist_malloc_copy_data(shmlist_t* node) {
+    size_t elesz = node->v->shm->esize - sizeof(shmlist_t);
+    void* ele = malloc(elesz);
+    fprintf(stderr, "Extracting data of size: %d\n", elesz);
+    if (NULL != ele) {
+        memcpy(ele, node->data, elesz);
     }
     return ele;
 }
@@ -111,8 +122,6 @@ int shmlist_del_safe(shmlist_t* sl) {
     return rc;
 }
 
-/** Iterate over the list */
-
 /**
  * @return true if the list is empty
  */
@@ -121,7 +130,7 @@ int shmlist_is_empty(shmlist_t *sl) {
 }
 
 /** return Remove head from list and return a local copy  */
-int shmlist_extract_head_safe(shmlist_t *sl, void** ehead) {
+int shmlist_extract_head_safe(shmlist_t *sl, void** head_data) {
     shmmutex_lock(&(sl->v->shm->lock));
     int rc = 0;
     shmlist_t *phead = sl->list->next;
@@ -133,8 +142,8 @@ int shmlist_extract_head_safe(shmlist_t *sl, void** ehead) {
         sl->list->next = phead->next;
         phead->next->prev = sl->list;
 
-        /* Make a copy of phead*/
-        *ehead = shmlist_malloc_copy(phead);
+        /* Make a copy of phead data */
+        *head_data = shmlist_malloc_copy(phead);
         
         /* Mark the phead memory as available for reuse */
         shmvector_del(phead->v, phead->idx);
@@ -143,15 +152,40 @@ int shmlist_extract_head_safe(shmlist_t *sl, void** ehead) {
     return rc;
 }
 
+/** Remove matching element from list and return a local copy of the data */
+int shmlist_extract_first_match_safe(shmlist_t *sl, void* val, shmlist_elecmp_fn elecmp, void** match) {
+
+    int rc = 1;
+    shmmutex_lock(&(sl->v->shm->lock));
+    shmlist_t *iter = sl->list->next;
+    while (iter != sl->list) {
+        if (0 == elecmp(val, iter->data)) {
+            fprintf(stderr, "Found item\n");
+            /* Splice out iter */
+            iter->prev->next = iter->next;
+            iter->next->prev = iter->prev;
+
+            /* Make a copy of iter data */
+            *match = shmlist_malloc_copy_data(iter);
+        
+            /* Mark the phead memory as available for reuse */
+            shmvector_del(iter->v, iter->idx);
+            rc = 0;
+            break;
+        }
+        iter = iter->next;
+    }
+    shmmutex_unlock(&(sl->v->shm->lock));
+    return rc;
+}
+
 /** return the length of the list  */
 int shmlist_length(shmlist_t *sl) {
-    /* Get the number of live elements in the vector minus the empty one */
+    /* Get the number of live elements in the vector minus the empty list head */
     return sl->v->shm->active_count - 1;
 }
 
-/**
- * return a pointer to the list head element
- */
+/** return a pointer to the list head element */
 shmlist_t* shmlist_head(shmlist_t *sl) {
     return sl->list->next;
 }
