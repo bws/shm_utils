@@ -30,7 +30,6 @@ static void* shmlist_malloc_copy(shmlist_t* node) {
 static void* shmlist_malloc_copy_data(shmlist_t* node) {
     size_t elesz = node->v->shm->esize - sizeof(shmlist_t);
     void* ele = malloc(elesz);
-    fprintf(stderr, "Extracting data of size: %d\n", elesz);
     if (NULL != ele) {
         memcpy(ele, node->data, elesz);
     }
@@ -160,7 +159,6 @@ int shmlist_extract_first_match_safe(shmlist_t *sl, void* val, shmlist_elecmp_fn
     shmlist_t *iter = sl->list->next;
     while (iter != sl->list) {
         if (0 == elecmp(val, iter->data)) {
-            fprintf(stderr, "Found item\n");
             /* Splice out iter */
             iter->prev->next = iter->next;
             iter->next->prev = iter->prev;

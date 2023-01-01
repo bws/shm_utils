@@ -98,6 +98,7 @@ int shmvector_destroy(shmvector_t *sv) {
 
 int shmvector_destroy_safe(shmvector_t *sv) {
     /* Take the lock */
+    fprintf(stderr, "shmcounter_destroy_safe called. It has bugs.\n");
     shmmutex_lock(&(sv->shm->lock));
 
     if (0 == shmvector_size(sv)) {
@@ -131,7 +132,7 @@ size_t shmvector_find_first_of(shmvector_t *sv, void* data, shmvector_elecmp_fn 
     for (int i = 0; i < sv->shm->capacity; i++) {
         //fprintf(stderr, "i %d act %d add %p\n", i, sv->shm->actives[i], sv->shm->eles + i);
         if (true == sv->shm->actives[i]) {
-            fprintf(stderr, "Examining active i %d act %d add %p\n", i, sv->shm->actives[i], sv->shm->eles + i*sv->shm->esize);
+            //fprintf(stderr, "Examining active i %d act %d add %p\n", i, sv->shm->actives[i], sv->shm->eles + i*sv->shm->esize);
             last_active_idx = i+1;
             if (0 == elecmp(data, sv->shm->eles + (i * sv->shm->esize))) {
                 last_active_idx = i;

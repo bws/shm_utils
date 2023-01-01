@@ -12,18 +12,13 @@
 static int shmcounter_uidcmp(void* lhs, void* rhs) {
 	shmcounter_uid_t* l = (shmcounter_uid_t*)(lhs);
 	shmcounter_data_t* r = (shmcounter_data_t*)(rhs);
-	fprintf(stderr, "UID CMP LHS: %d %d %d\n",
-			l->group, l->ctype, l->tag);
-	fprintf(stderr, "UID CMP RHS: %d %d %d\n",
-			r->id.group, r->id.ctype, r->id.tag);
 	if ( (l->group == r->id.group) && 
 		 (l->ctype == r->id.ctype) && 
-		 (l->tag == r->id.tag)) {
-		fprintf(stderr, "They're equal.\n");
+		 (l->tag == r->id.tag) &&
+		 (l->lid == r->id.lid)) {
 		return 0;
 	}
 	else {
-		fprintf(stderr, "They're NOT equal.\n");
 		return 1;
 	}
 }
@@ -69,9 +64,7 @@ int shmcounter_create(shmcounter_t *sc, shmcounter_set_t *scs, shmcounter_uid_t 
 	shmmutex_lock(&(scs->v->shm->lock));
 	/* Search the vector for the supplied id, create it if required */
 	int sz = shmvector_size(scs->v);
-	fprintf(stderr, "Vector size is %d Searching for id %d %d %d\n", sz, cid.group, cid.ctype, cid.tag);
 	int idx = shmvector_find_first_of(scs->v, &cid, &shmcounter_uidcmp);
-	fprintf(stderr, "Found matching counter at idx: %d\n", idx);
 	if (idx == sz) {
 		shmcounter_data_t d = {.mutex = 0, .id = cid, .count = 0, .refcount = 0};
 		size_t newidx = shmvector_insert_at(scs->v, idx, &d);
@@ -157,9 +150,39 @@ int shmcounter_value(shmcounter_t* sc) {
 }
 
 /** Compare the value of the counter */
-bool shmcounter_isequal(shmcounter_t* sc, int val) {
-	fprintf(stderr, "Checking value for idx: %d\n", sc->idx);
+bool shmcounter_isvalue(shmcounter_t* sc, int val) {
 	shmcounter_data_t *d = shmvector_at(sc->set->v, sc->idx);
-	fprintf(stderr, "Counter for idx: %d\n", d->count);
 	return (val == d->count);
+}
+
+/** Compare the value of the counter */
+bool shmcounter_isequal_safe(shmcounter_t* lhs, shmcounter_t* rhs) {
+	int lcount, rcount;
+	shmcounter_data_t *l, *r;
+
+	/* Short circuit on self comparison (which isn't lock safe) */
+	if (lhs->idx == rhs->idx)
+		return true;
+
+	/* Lock the vector to prevent deletion */
+	shmmutex_lock(&(lhs->set->v->shm->lock));
+
+	/* Lock the lhs counter */
+	l = shmvector_at(lhs->set->v, lhs->idx);
+	shmmutex_lock(&(l->mutex));
+	lcount = l->count;
+
+	/* Lock the rhs counter */
+	r = shmvector_at(rhs->set->v, rhs->idx);
+	shmmutex_lock(&(r->mutex));
+	rcount = r->count;
+
+	/* Unlock the counters */
+	shmmutex_unlock(&(r->mutex));
+	shmmutex_unlock(&(l->mutex));
+
+	/* End vector critical section */
+	shmmutex_unlock(&(lhs->set->v->shm->lock));
+
+	return (lcount == rcount);
 }

@@ -37,6 +37,8 @@ typedef struct shmcounter_uid {
     uint64_t ctype;
     /** Tag this counter belongs to */
     uint64_t tag;
+    /** Local id */
+    uint64_t lid;
 } shmcounter_uid_t;
 
 /** The data stored within the shared storage for this counter */
@@ -110,13 +112,28 @@ void shmcounter_inc_safe(shmcounter_t* sc, int val);
  */
 void shmcounter_dec_safe(shmcounter_t* sc, int val);
 
+/** 
+ * @return the value of the counter 
+ */
+int shmcounter_value(shmcounter_t* sc);
+
 /**
  * Compare the value of the counter
  * @param sc Counter struct
  * @param val Amount to compare counter to
  * @return true if the counter equals val, otherwise false
  */
-bool shmcounter_isequal(shmcounter_t* sc, int val);
+bool shmcounter_isvalue(shmcounter_t* sc, int val);
+
+/**
+ * Compare two counters for equality counter with mutex safety
+ * @param lhs Counter struct
+ * @param rhs Counter struct
+ * @return true if the counters have the same value, otherwise false
+ * 
+ * @note Currently assumes both counters are from the same counter set.
+ */
+bool shmcounter_isequal_safe(shmcounter_t* lhs, shmcounter_t* rhs);
 
 #ifdef __cplusplus
 }
