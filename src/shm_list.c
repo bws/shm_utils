@@ -6,32 +6,64 @@
 #include "shm_mutex.h"
 #include "shm_list.h"
 
+/** The data stored in the list shared vector */
+typedef struct shmlist_element {
+	/* Index within the vector that stores data for this node */
+	size_t idx;
+
+    /* Next */
+    size_t next_idx;
+
+    /* Previous */
+    size_t prev_idx;
+
+	/* Pointer to just the data element */
+	void* data;
+} shmlist_ele_t;
+
+/* Return the data within vector element */
+static void* shmlist_ele_get_data(void* v_ele) {
+    shmlist_ele_t *ele = v_ele;
+    ele->data = v_ele + sizeof(shmlist_ele_t);
+    return (v_ele + sizeof(shmlist_ele_t));
+}
+
+static inline size_t shmlist_get_next_idx(shmlist_t *sl, size_t idx) {
+    shmlist_ele_t *li = shmvector_at(sl->v, idx);
+    return li->next_idx;
+}
+    
+static inline size_t shmlist_get_prev_idx(shmlist_t *sl, size_t idx) {
+    shmlist_ele_t *li = shmvector_at(sl->v, idx);
+    return li->prev_idx;
+}
+    
+static inline size_t shmlist_set_next_idx(shmlist_t *sl, size_t idx, size_t val) {
+    shmlist_ele_t *li = shmvector_at(sl->v, idx);
+    li->next_idx = val;
+}
+    
+static inline size_t shmlist_set_prev_idx(shmlist_t *sl, size_t idx, size_t val) {
+    shmlist_ele_t *li = shmvector_at(sl->v, idx);
+    li->prev_idx = val;
+}
+
 /* Create a new list item for the list that contains existing */
-static void shmlist_create_tail(shmlist_t *nitem, shmlist_t *existing, size_t idx) {
-    nitem->list = existing->list;
-    nitem->next = existing->list;
-    nitem->prev = existing->list->prev;
-    nitem->idx = idx;
-    nitem->v = existing->v;
-    nitem->data = nitem + 1;
+static void shmlist_create_tail(shmlist_t *sl, size_t idx, void *ntail, void *ele_data) {
+    shmlist_ele_t * t_ele = ntail;
+    t_ele->idx = idx;
+    t_ele->next_idx = 0;
+    t_ele->prev_idx = shmlist_get_prev_idx(sl, 0);
+    t_ele->data = (void*)ntail + sizeof(shmlist_ele_t);
+    memcpy(t_ele->data, ele_data, sl->v->shm->esize);
 }
 
 /* Allocate and fill the buffer with the element from the list node */
-static void* shmlist_malloc_copy(shmlist_t* node) {
-    size_t elesz = node->v->shm->esize - sizeof(shmlist_t);
+static void* shmlist_malloc_copy_data(shmlist_t* sl, shmlist_ele_t* node) {
+    size_t elesz = sl->v->shm->esize - sizeof(shmlist_ele_t);
     void* ele = malloc(elesz);
     if (NULL != ele) {
-        memcpy(ele, node->data, elesz);
-    }
-    return ele;
-}
-
-/* Allocate and fill the buffer with the element from the list node */
-static void* shmlist_malloc_copy_data(shmlist_t* node) {
-    size_t elesz = node->v->shm->esize - sizeof(shmlist_t);
-    void* ele = malloc(elesz);
-    if (NULL != ele) {
-        memcpy(ele, node->data, elesz);
+        memcpy(ele, shmlist_ele_get_data(node), elesz);
     }
     return ele;
 }
@@ -44,58 +76,61 @@ int shmlist_create(shmlist_t *sl, const char* segname, size_t elesz, size_t sz) 
     /* Create the vector */
     shmvector_t *v = malloc(sizeof(shmvector_t));
     /* Vector size must be at least 1 to support empty lists */
-    shmvector_create(v, segname, sizeof(shmlist_t) + elesz, sz + 1);
+    shmvector_create(v, segname, sizeof(shmlist_ele_t) + elesz, sz + 1);
     sl->v = v;
 
     /* Critical section: initialize the head once */
-    shmmutex_lock(&(sl->v->shm->lock));
-    if (0 == shmvector_size(sl->v)) {
-        /* Setup the list ptrs */
-        sl->list = sl;
-        sl->next = sl;
-        sl->prev = sl;
-
-        /* The head always uses the first element of the vector */
-        int rc = shmvector_insert_at(sl->v, 0, sl);
-        assert(0 == rc);
-        sl->idx = 0;
-
-        /* Set the data ptr to point to the end of this item */
-        sl->data = (shmlist_t*)shmvector_at(sl->v, 0) + 1;
+    int rc = shmmutex_lock(&(sl->v->shm->lock));
+    if (rc != 0) {
+        fprintf(stderr, "Mutex lock failed: %s\n", __func__);
+        abort();
     }
+    if (0 == shmvector_size(sl->v)) {
+        /* The dummy head always uses the first element of the vector */
+        shmlist_ele_t* dummy = calloc(1, sizeof(shmlist_ele_t) + elesz);
+        int rc = shmvector_insert_at(sl->v, 0, dummy);
+        assert(0 == rc);
+        free(dummy);
+    }
+
+    /* Set the pointer to the dummy idx */
+    sl->cur_idx_unsafe = 0;
+
     shmmutex_unlock(&(sl->v->shm->lock));
+    return 0;
 }
 
 /* Release resources associated with this shared memory list */
 int shmlist_destroy(shmlist_t *sl) {
-    sl->list = NULL;
-    sl->next = NULL;
-    sl->prev = NULL;
-    shmvector_destroy(sl->v);
+    shmvector_destroy_safe(sl->v);
     free(sl->v);
 }
 
 /**
- * Add a copy of ele to an available slot in sv
+ * Add a copy of ele to the tail of the list
  */
-int shmlist_add_tail_safe(shmlist_t* sl, void* ele) {
+int shmlist_add_tail_safe(shmlist_t* sl, void* ele_data) {
     int rc = 0;
 
     shmmutex_lock(&(sl->v->shm->lock));
 
     /* Create the new list node */
-    int idx = shmvector_insert_quick(sl->v);
-    if (idx < 0) {
+    int tidx = shmvector_insert_quick(sl->v);
+    if (tidx <= 0) {
         rc = 1;
         fprintf(stderr, "ERROR: Shared %s failed.\n", __FUNCTION__);
+        return rc;
     }
-    shmlist_t* ntail = shmvector_at(sl->v, idx);
-    shmlist_create_tail(ntail, sl, idx);
-    memcpy(ntail->data, ele, ntail->v->shm->esize);
+    void* ntail = shmvector_at(sl->v, tidx);
+    shmlist_create_tail(sl, tidx, ntail, ele_data);
 
     /* Insert the new tail into the list */
-    sl->list->prev->next = ntail;
-    sl->list->prev = ntail;
+    size_t prevtail_idx = shmlist_get_prev_idx(sl, 0);
+    shmlist_set_next_idx(sl, prevtail_idx, tidx);
+    shmlist_set_prev_idx(sl, 0, tidx);
+
+    /* List now points at the new tail */
+    sl->cur_idx_unsafe = tidx;
 
     shmmutex_unlock(&(sl->v->shm->lock));
 
@@ -103,20 +138,27 @@ int shmlist_add_tail_safe(shmlist_t* sl, void* ele) {
 }
 
 /**
- * Delete this element from the list
+ * Delete this element from the list. This function is difficult to use correctly.
  */
 int shmlist_del_safe(shmlist_t* sl) {
     int rc = 0;
     shmmutex_lock(&(sl->v->shm->lock));
     /* Deleting the dummy node at the list beginning is a no-op */
-    if (sl != sl->list) {
+    if (sl->cur_idx_unsafe != 0) {
+        
         /* Adjust adjacent list entries */
-        sl->prev->next = sl->next;
-        sl->next->prev = sl->prev;
+        size_t adj_prev_idx = shmlist_get_prev_idx(sl, sl->cur_idx_unsafe);
+        size_t adj_next_idx = shmlist_get_next_idx(sl, sl->cur_idx_unsafe);
+        shmlist_set_next_idx(sl, adj_prev_idx, adj_next_idx);
+        shmlist_set_prev_idx(sl, adj_next_idx, adj_prev_idx);
 
         /* Deallocate the space */
-        rc = shmvector_del(sl->v, sl->idx);
-    } 
+        rc = shmvector_del(sl->v, sl->cur_idx_unsafe);
+
+        /* Update the current list entry to be next */
+        sl->cur_idx_unsafe = adj_next_idx;
+    }
+ 
     shmmutex_unlock(&(sl->v->shm->lock));
     return rc;
 }
@@ -125,27 +167,31 @@ int shmlist_del_safe(shmlist_t* sl) {
  * @return true if the list is empty
  */
 int shmlist_is_empty(shmlist_t *sl) {
-    return (sl->list == sl->list->next);
+    size_t hnext = shmlist_get_next_idx(sl, 0);
+    return (0 == hnext);
 }
 
 /** return Remove head from list and return a local copy  */
 int shmlist_extract_head_safe(shmlist_t *sl, void** head_data) {
     shmmutex_lock(&(sl->v->shm->lock));
     int rc = 0;
-    shmlist_t *phead = sl->list->next;
-    if (sl->list == sl->list->next) {
+    if (shmlist_is_empty(sl)) {
         rc = 1;
     }
     else {
-        /* Splice out phead */
-        sl->list->next = phead->next;
-        phead->next->prev = sl->list;
+        /* Retrieve the head */
+        size_t hidx = shmlist_get_next_idx(sl, 0);
+        shmlist_ele_t *phead = shmvector_at(sl->v, hidx);
 
-        /* Make a copy of phead data */
-        *head_data = shmlist_malloc_copy(phead);
+        /* Splice out the head */
+        shmlist_set_next_idx(sl, 0, phead->next_idx);
+        shmlist_set_prev_idx(sl, phead->next_idx, phead->prev_idx);
+
+        /* Make a local copy of phead data */
+        *head_data = shmlist_malloc_copy_data(sl, phead);
         
         /* Mark the phead memory as available for reuse */
-        shmvector_del(phead->v, phead->idx);
+        shmvector_del(sl->v, phead->idx);
     }
     shmmutex_unlock(&(sl->v->shm->lock));
     return rc;
@@ -156,22 +202,24 @@ int shmlist_extract_first_match_safe(shmlist_t *sl, void* val, shmlist_elecmp_fn
 
     int rc = 1;
     shmmutex_lock(&(sl->v->shm->lock));
-    shmlist_t *iter = sl->list->next;
-    while (iter != sl->list) {
-        if (0 == elecmp(val, iter->data)) {
+    size_t iter = shmlist_head(sl)->cur_idx_unsafe;
+    while (iter != 0) {
+        shmlist_ele_t *item = shmvector_at(sl->v, iter);
+        void* idata = shmlist_ele_get_data(item);
+        if (0 == elecmp(val, idata)) {
             /* Splice out iter */
-            iter->prev->next = iter->next;
-            iter->next->prev = iter->prev;
+            shmlist_set_next_idx(sl, item->prev_idx, item->next_idx);
+            shmlist_set_prev_idx(sl, item->next_idx, item->prev_idx);
 
-            /* Make a copy of iter data */
-            *match = shmlist_malloc_copy_data(iter);
+            /* Make a local copy of iter data */
+            *match = shmlist_malloc_copy_data(sl, item);
         
             /* Mark the phead memory as available for reuse */
-            shmvector_del(iter->v, iter->idx);
+            shmvector_del(sl->v, iter);
             rc = 0;
             break;
         }
-        iter = iter->next;
+        iter = shmlist_get_next_idx(sl, iter);
     }
     shmmutex_unlock(&(sl->v->shm->lock));
     return rc;
@@ -185,14 +233,38 @@ int shmlist_length(shmlist_t *sl) {
 
 /** return a pointer to the list head element */
 shmlist_t* shmlist_head(shmlist_t *sl) {
-    return sl->list->next;
+    size_t hidx = shmlist_get_next_idx(sl, 0);
+    sl->cur_idx_unsafe = hidx;
+    return sl;
+}
+
+/** return a pointer to the list tail element */
+shmlist_t* shmlist_tail(shmlist_t *sl) {
+    size_t tidx = shmlist_get_prev_idx(sl, 0);
+    sl->cur_idx_unsafe = tidx;
+    return sl;
 }
 
 /* return a pointer to the next element */
 shmlist_t* shmlist_next(shmlist_t *sl) {
-    return sl->next;
+    size_t nidx = shmlist_get_next_idx(sl, sl->cur_idx_unsafe);
+    sl->cur_idx_unsafe = nidx;
+    return sl;
 }
 
+/* return a pointer to the previous element */
+shmlist_t* shmlist_prev(shmlist_t *sl) {
+    size_t pidx = shmlist_get_prev_idx(sl, sl->cur_idx_unsafe);
+    sl->cur_idx_unsafe = pidx;
+    return sl;
+}
+
+/* return a pointer to the list inside the data */
+void* shmlist_get_data(shmlist_t *sl) {
+    void *v_ele = shmvector_at(sl->v, sl->cur_idx_unsafe);
+    void *ele_data = shmlist_ele_get_data(v_ele);
+    return ele_data;
+}
 /* Insert a copy of ele after this list ptr */
 int shmlist_insert_after_safe(shmlist_t *sl, void* ele) {
     return -1;

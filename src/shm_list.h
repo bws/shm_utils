@@ -29,27 +29,14 @@ extern "C" {
  */
 typedef int (*shmlist_elecmp_fn)(void* lhs, void* rhs);
 
-typedef struct shmlist shmlist_t;
-
 /** Public type for creating a shared memory doubly linked list */
 typedef struct shmlist {
-    /* A dummy item just before the list head */
-    shmlist_t* list;
-
-    /* Next */
-    shmlist_t* next;
-
-    /* Previous */
-    shmlist_t* prev;
-
-	/* Index within the vector that stores data for this node */
-	size_t idx;
+    /* Current list element. This is unsafe to use. */
+    size_t cur_idx_unsafe;
 
 	/* A shared memory vector to store data */
 	shmvector_t* v;
 
-	/* Pointer to just the data element */
-	void* data;
 } shmlist_t;
 
 
@@ -110,9 +97,24 @@ int shmlist_length(shmlist_t *sl);
 shmlist_t* shmlist_head(shmlist_t *sl);
 
 /**
+ * @return a pointer to the list tail element
+ */
+shmlist_t* shmlist_tail(shmlist_t *sl);
+
+/**
  * @return a pointer to the next element
  */
 shmlist_t* shmlist_next(shmlist_t *sl);
+
+/**
+ * @return a pointer to the previous element
+ */
+shmlist_t* shmlist_prev(shmlist_t *sl);
+
+/**
+ * @return a pointer to the data at this list entry
+ */
+void* shmlist_get_data(shmlist_t *sl);
 
 /**
  * @return a copy of ele after this list ptr

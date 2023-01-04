@@ -98,7 +98,7 @@ int shmvector_destroy(shmvector_t *sv) {
 
 int shmvector_destroy_safe(shmvector_t *sv) {
     /* Take the lock */
-    fprintf(stderr, "shmcounter_destroy_safe called. It has bugs.\n");
+    fprintf(stderr, "shmvector_destroy_safe called. It may not free all resources.\n");
     shmmutex_lock(&(sv->shm->lock));
 
     if (0 == shmvector_size(sv)) {
@@ -189,7 +189,7 @@ int shmvector_insert_at(shmvector_t* sv, size_t idx, void* ele) {
 void* shmvector_safe_at(shmvector_t* sv, size_t idx) {
 	void *val;
     shmmutex_lock(&sv->shm->lock);
-    val - shmvector_at(sv, idx);
+    val = shmvector_at(sv, idx);
     shmmutex_unlock(&sv->shm->lock);
 	return val;
 }
@@ -236,7 +236,7 @@ int shmvector_del(shmvector_t* sv, size_t idx) {
     int rc = -1;
     if (sv->shm->actives[idx]) {
         sv->shm->actives[idx] = false;
-        sv->shm->active_count --;
+        sv->shm->active_count--;
         rc = 0;
     }
     return rc;
