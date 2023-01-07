@@ -1,15 +1,21 @@
 
 #include <gtest/gtest.h>
+#include <string>
 #include "shm_list.h"
+using namespace std;
+
+static string shmdir = "/dev/shm";
 
 /* Test empty creation */
 TEST(shmlist, create_empty) {
+    const char* listname = "/shmlist_create_empty";
+    unlink(string(shmdir + string(listname)).c_str());
     shmlist_t sl1;
-    shmlist_create(&sl1, "/shmlist_create_empty", sizeof(int), 0);
+    shmlist_create(&sl1, listname, sizeof(int), 0);
     EXPECT_EQ(0, shmlist_length(&sl1));
 
     shmlist_t sl2;
-    shmlist_create(&sl2, "/shmlist_create_empty", sizeof(int), 0);
+    shmlist_create(&sl2, listname, sizeof(int), 0);
     EXPECT_EQ(0, shmlist_length(&sl2));
 
     shmlist_destroy(&sl1);
@@ -18,12 +24,14 @@ TEST(shmlist, create_empty) {
 
 /* Test creation with large types */
 TEST(shmlist, create_large) {
+    const char* listname = "/shmlist_create_large";
+    unlink(string(shmdir + string(listname)).c_str());
     shmlist_t sl1;
-    shmlist_create(&sl1, "/shmlist_create_large", 192, 2048);
+    shmlist_create(&sl1, listname, 192, 2048);
     EXPECT_EQ(0, shmlist_length(&sl1));
 
     shmlist_t sl2;
-    shmlist_create(&sl2, "/shmlist_create_large", 192, 2048);
+    shmlist_create(&sl2, listname, 192, 2048);
     EXPECT_EQ(0, shmlist_length(&sl2));
 
     shmlist_destroy(&sl1);
@@ -32,16 +40,22 @@ TEST(shmlist, create_large) {
 
 /* Test basic destruction */
 TEST(shmlist, destroy_basic) {
+    const char* listname = "/shmlist_destroy_basic";
+    unlink(string(shmdir + string(listname)).c_str());
+
     shmlist_t sl1;
-    shmlist_create(&sl1, "/shmlist_destroy_basic", sizeof(int), 1024);
+    shmlist_create(&sl1, listname, sizeof(int), 1024);
     shmlist_destroy(&sl1);
     EXPECT_EQ(0, 0);
 }
 
 /* Test add_tail */
 TEST(shmlist, add_tail_safe_basic) {
+    const char* listname = "/shmlist_add_tail_safe_basic";
+    unlink(string(shmdir + string(listname)).c_str());
+
     shmlist_t sl1;
-    shmlist_create(&sl1, "/shmlist_add_tail_safe_basic", sizeof(char), 1024);
+    shmlist_create(&sl1, listname, sizeof(char), 1024);
     std::cerr << "Curr: " << sl1.cur_idx_unsafe << std::endl;
 
     char ele[5] = "abcd";
@@ -78,8 +92,11 @@ TEST(shmlist, add_tail_safe_basic) {
 
 /* Test del */
 TEST(shmlist, del_safe_basic) {
+    const char* listname = "/shmlist_del_safe_basic";
+    unlink(string(shmdir + string(listname)).c_str());
+
     shmlist_t sl1;
-    shmlist_create(&sl1, "/shmlist_del_safe_basic", sizeof(char), 1024);
+    shmlist_create(&sl1, listname, sizeof(char), 1024);
 
     // Prepopulate the list with 4 elements
     char ele[5] = "abcd";
@@ -122,8 +139,11 @@ int basic_char_cmp(void* lhs, void* rhs) {
 
 
 TEST(shmlist, extract_first_match_safe_basic) {
+    const char* listname = "/shmlist_extract_first_match_safe_basic";
+    unlink(string(shmdir + string(listname)).c_str());
+
     shmlist_t sl;
-    shmlist_create(&sl, "shmlist_extract_first_match_safe_basic", sizeof(char), 1024);
+    shmlist_create(&sl, listname, sizeof(char), 1024);
 
     // Prepopulate the list with 4 elements 
     char ele[5] = "abcd";
@@ -186,9 +206,85 @@ TEST(shmlist, extract_first_match_safe_basic) {
 
 }
 
+TEST(shmlist, extract_n_matches_safe_basic) {
+    const char* listname = "/shmlist_extract_n_matches_safe_basic";
+    unlink(string(shmdir + string(listname)).c_str());
+
+    shmlist_t sl;
+    shmlist_create(&sl, listname, sizeof(char), 1024);
+
+    // Prepopulate the list with 8 elements 
+    char ele[9] = "abababcd";
+    shmlist_add_tail_safe(&sl, &ele[0]);
+    shmlist_add_tail_safe(&sl, &ele[1]);
+    shmlist_add_tail_safe(&sl, &ele[2]);
+    shmlist_add_tail_safe(&sl, &ele[3]);
+    shmlist_add_tail_safe(&sl, &ele[4]);
+    shmlist_add_tail_safe(&sl, &ele[5]);
+    shmlist_add_tail_safe(&sl, &ele[6]);
+    shmlist_add_tail_safe(&sl, &ele[7]);
+    char e0 = ((char*)shmlist_get_data(shmlist_head(&sl)))[0];
+    char e1 = ((char*)shmlist_get_data(shmlist_next(&sl)))[0];
+    char e2 = ((char*)shmlist_get_data(shmlist_next(&sl)))[0];
+    char e3 = ((char*)shmlist_get_data(shmlist_next(&sl)))[0];
+    char e4 = ((char*)shmlist_get_data(shmlist_next(&sl)))[0];
+    char e5 = ((char*)shmlist_get_data(shmlist_next(&sl)))[0];
+    char e6 = ((char*)shmlist_get_data(shmlist_next(&sl)))[0];
+    char e7 = ((char*)shmlist_get_data(shmlist_next(&sl)))[0];
+    EXPECT_EQ(ele[0], e0);
+    EXPECT_EQ(ele[1], e1);
+    EXPECT_EQ(ele[2], e2);
+    EXPECT_EQ(ele[3], e3);
+    EXPECT_EQ(ele[4], e4);
+    EXPECT_EQ(ele[5], e5);
+    EXPECT_EQ(ele[6], e6);
+    EXPECT_EQ(ele[7], e7);
+
+    // Match the first 'a' element in the list
+    char a = 'a';
+    size_t max_match = 1;
+    size_t match_count;
+    char* items;
+    int rc = shmlist_extract_n_matches_safe(&sl, max_match, &a, basic_char_cmp, &match_count, (void**)&items);
+    EXPECT_EQ(0, rc);
+    EXPECT_EQ(7, shmlist_length(&sl));
+    EXPECT_EQ(1, match_count);
+    EXPECT_EQ('a', items[0]);
+    free(items);
+
+    // Match the all 'b' elements in the list
+    char b = 'b';
+    max_match = 8;
+    items = NULL;
+    rc = shmlist_extract_n_matches_safe(&sl, max_match, &b, basic_char_cmp, &match_count, (void**)&items);
+    EXPECT_EQ(0, rc);
+    EXPECT_EQ(4, shmlist_length(&sl));
+    EXPECT_EQ(3, match_count);
+    EXPECT_EQ('b', items[0]);
+    EXPECT_EQ('b', items[1]);
+    EXPECT_EQ('b', items[2]);
+    free(items);
+
+    // Now confirm list state is "aacd"
+    EXPECT_EQ(4, shmlist_length(&sl));
+    e0 = ((char*)shmlist_get_data(shmlist_head(&sl)))[0];
+    EXPECT_EQ('a', e0);
+    e1 = ((char*)shmlist_get_data(shmlist_next(&sl)))[0];
+    EXPECT_EQ('a', e1);
+    e2 = ((char*)shmlist_get_data(shmlist_next(&sl)))[0];
+    EXPECT_EQ('c', e2);
+    e3 = ((char*)shmlist_get_data(shmlist_next(&sl)))[0];
+    EXPECT_EQ('d', e3);
+
+    shmlist_destroy(&sl);
+}
+
 TEST(shmlist, shmlist_is_empty_basic) {
+    const char* listname = "/shmlist_is_empty_basic";
+    unlink(string(shmdir + string(listname)).c_str());
+
     shmlist_t sl1;
-    shmlist_create(&sl1, "/shmlist_is_empty_basic", sizeof(char), 1);
+    shmlist_create(&sl1, listname, sizeof(char), 1);
 
     // Test a new empty list
     EXPECT_EQ(1, shmlist_is_empty(&sl1));

@@ -87,6 +87,19 @@ int shmlist_extract_head_safe(shmlist_t *sl, void** head);
 int shmlist_extract_first_match_safe(shmlist_t *sl, void *value, shmlist_elecmp_fn elecmp, void **ele);
 
 /**
+ * Remove up to n matching elements from list and return local copies of the data
+ * @return 0 if an element was matched and returned, non-zero if no match was found
+ * @param[in] sl List struct
+ * @param[in] match_max the maximum number of elements to return
+ * @param[in] value value to pass to lhs of comparison function
+ * @param[in] elecmp Element comparison function
+ * @param[out] elecnt the number of matches returned
+ * @param[out] ele an array of locally allocated matches (caller must free this memory)
+ */
+int shmlist_extract_n_matches_safe(shmlist_t *sl, size_t match_max, void *value, shmlist_elecmp_fn elecmp, 
+								   size_t* elecnt, void **ele);
+
+/**
  * @return the length of the list
  */
 int shmlist_length(shmlist_t *sl);

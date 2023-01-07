@@ -1,20 +1,29 @@
 
 #include <gtest/gtest.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <string>
 #include "shm_counter.h"
+using namespace std;
+
+static string shmdir = "/dev/shm";
 
 /* Test simple creation */
 TEST(shmcounter, set_create_simple) {
-
+    const char* set1 = "/shmcounter_set_create_simple";
+    const char* set2 = "/shmcounter_set_create_simple2";
+    unlink(string(shmdir + string(set1)).c_str());
+    unlink(string(shmdir + string(set2)).c_str());
     shmcounter_set_t sc1;
-    int rc = shmcounter_set_create(&sc1, "/shmcounter_set_create_simple");
+    int rc = shmcounter_set_create(&sc1, set1);
     EXPECT_EQ(0, rc);
 
     shmcounter_set_t sc1_copy;
-    rc = shmcounter_set_create(&sc1_copy, "/shmcounter_set_create_simple");
+    rc = shmcounter_set_create(&sc1_copy, set1);
     EXPECT_EQ(0, rc);
 
     shmcounter_set_t sc2;
-    rc = shmcounter_set_create(&sc2, "/shmcounter_set_create_simple2");
+    rc = shmcounter_set_create(&sc2, set2);
     EXPECT_EQ(0, rc);
 
     shmcounter_set_destroy(&sc1);
@@ -25,9 +34,12 @@ TEST(shmcounter, set_create_simple) {
 /* Test basic set destruction */
 TEST(shmcounter, set_destroy_basic) {
 
+    const char* setname = "/shmcounter_set_destroy_basic";
+    unlink(string(shmdir + string(setname)).c_str());
+
     // Create a counter and destroy
     shmcounter_set_t scs;
-    int rc = shmcounter_set_create(&scs, "/shmcounter-basic_destroy");
+    int rc = shmcounter_set_create(&scs, setname);
     EXPECT_EQ(0, rc);
     rc = shmcounter_set_destroy(&scs);
     EXPECT_EQ(0, rc);
@@ -37,7 +49,9 @@ TEST(shmcounter, set_destroy_basic) {
 TEST(shmcounter, create_simple) {
 
     shmcounter_set_t scs;
-    int rc = shmcounter_set_create(&scs, "/shmcounter_create_simple");
+    const char* setname = "/shmcounter_create_simple";
+    unlink(string(shmdir + string(setname)).c_str());
+    int rc = shmcounter_set_create(&scs, setname);
     EXPECT_EQ(0, rc);
 
     shmcounter_uid_t id1 = {.group = 1, .ctype = 2, .tag = 3, .lid = 4};
@@ -67,7 +81,9 @@ TEST(shmcounter, create_simple) {
 TEST(shmcounter, destroy_basic) {
 
     shmcounter_set_t scs;
-    int rc = shmcounter_set_create(&scs, "/shmcounter_destroy_basic");
+    const char* setname = "/shmcounter_destroy_basic";
+    unlink(string(shmdir + string(setname)).c_str());
+    int rc = shmcounter_set_create(&scs, setname);
     EXPECT_EQ(0, rc);
 
     // Create a counter, increment it, and destroy
@@ -92,7 +108,9 @@ TEST(shmcounter, destroy_basic) {
 TEST(shmcounter, destroy_reuse) {
 
     shmcounter_set_t scs;
-    int rc = shmcounter_set_create(&scs, "/shmcounter_destroy_basic");
+    const char* setname = "/shmcounter_destroy_reuse";
+    unlink(string(shmdir + string(setname)).c_str());
+    int rc = shmcounter_set_create(&scs, setname);
     EXPECT_EQ(0, rc);
 
     // Create a counter, increment it, and destroy
@@ -120,7 +138,9 @@ TEST(shmcounter, destroy_reuse) {
 TEST(shmcounter, inc_basic) {
 
     shmcounter_set_t scs;
-    int rc = shmcounter_set_create(&scs, "/shmcounter_isequal_basic");
+    const char* setname = "/shmcounter_inc_basic";
+    unlink(string(shmdir + string(setname)).c_str());
+    int rc = shmcounter_set_create(&scs, setname);
     EXPECT_EQ(0, rc);
 
     shmcounter_uid_t id1 = {.group = 1, .ctype = 1, .tag = 1, .lid = 1};
@@ -151,7 +171,9 @@ TEST(shmcounter, inc_basic) {
 TEST(shmcounter, dec_basic) {
 
     shmcounter_set_t scs;
-    int rc = shmcounter_set_create(&scs, "/shmcounter_isequal_basic");
+    const char* setname = "/shmcounter_dec_basic";
+    unlink(string(shmdir + string(setname)).c_str());
+    int rc = shmcounter_set_create(&scs, setname);
     EXPECT_EQ(0, rc);
 
     shmcounter_uid_t id1 = {.group = 1, .ctype = 1, .tag = 1, .lid = 1};
@@ -181,7 +203,9 @@ TEST(shmcounter, dec_basic) {
 TEST(shmcounter, value_basic) {
 
     shmcounter_set_t scs;
-    int rc = shmcounter_set_create(&scs, "/shmcounter_isequal_basic");
+    const char* setname = "/shmcounter_value_basic";
+    unlink(string(shmdir + string(setname)).c_str());
+    int rc = shmcounter_set_create(&scs, setname);
     EXPECT_EQ(0, rc);
 
     shmcounter_uid_t id1 = {.group = 1, .ctype = 1, .tag = 1, .lid = 1};
@@ -211,7 +235,9 @@ TEST(shmcounter, value_basic) {
 TEST(shmcounter, isvalue_basic) {
 
     shmcounter_set_t scs;
-    int rc = shmcounter_set_create(&scs, "/shmcounter_isequal_basic");
+    const char* setname = "/shmcounter_isvalue_basic";
+    unlink(string(shmdir + string(setname)).c_str());
+    int rc = shmcounter_set_create(&scs, setname);
     EXPECT_EQ(0, rc);
 
     shmcounter_uid_t id1 = {.group = 1, .ctype = 1, .tag = 1, .lid = 1};
@@ -241,7 +267,9 @@ TEST(shmcounter, isvalue_basic) {
 TEST(shmcounter, isequal_safe_basic) {
 
     shmcounter_set_t scs;
-    int rc = shmcounter_set_create(&scs, "/shmcounter_isequal_basic");
+    const char* setname = "/shmcounter_isequal_safe_basic";
+    unlink(string(shmdir + string(setname)).c_str());
+    int rc = shmcounter_set_create(&scs, setname);
     EXPECT_EQ(0, rc);
 
 
@@ -279,9 +307,10 @@ TEST(shmcounter, isequal_safe_basic) {
 TEST(shmcounter, set_if_zero_safe_basic) {
 
     shmcounter_set_t scs;
-    int rc = shmcounter_set_create(&scs, "/shmcounter_isequal_basic");
+    const char* setname = "/shmcounter_set_if_zero_safe_basic";
+    unlink(string(shmdir + string(setname)).c_str());
+    int rc = shmcounter_set_create(&scs, setname);
     EXPECT_EQ(0, rc);
-
 
     shmcounter_uid_t id1 = {.group = 1, .ctype = 1, .tag = 1, .lid = 1};
     shmcounter_t sc1;

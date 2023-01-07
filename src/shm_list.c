@@ -62,6 +62,15 @@ static void shmlist_create_tail(shmlist_t *sl, size_t idx, void *ntail, void *el
     memcpy(t_ele + 1, ele_data, sl->v->shm->esize - sizeof(shmlist_ele_t));
 }
 
+/* Fill a buffer with the element from the list node */
+static void* shmlist_copy_data(shmlist_t* sl, void* ele, shmlist_ele_t* node) {
+    if (NULL != ele) {
+        size_t elesz = sl->v->shm->esize - sizeof(shmlist_ele_t);
+        memcpy(ele, shmlist_ele_get_data(node), elesz);
+    }
+    return ele;
+}
+
 /* Allocate and fill the buffer with the element from the list node */
 static void* shmlist_malloc_copy_data(shmlist_t* sl, shmlist_ele_t* node) {
     size_t elesz = sl->v->shm->esize - sizeof(shmlist_ele_t);
@@ -71,6 +80,7 @@ static void* shmlist_malloc_copy_data(shmlist_t* sl, shmlist_ele_t* node) {
     }
     return ele;
 }
+
 /* 
     Create and allocate a new shared memory list 
     Note: We keep an empty value at the beginning of the list
@@ -202,7 +212,7 @@ int shmlist_extract_head_safe(shmlist_t *sl, void** head_data) {
 }
 
 /** Remove matching element from list and return a local copy of the data */
-int shmlist_extract_first_match_safe(shmlist_t *sl, void* val, shmlist_elecmp_fn elecmp, void** match) {
+int shmlist_extract_first_match_safe(shmlist_t *sl, void* cmpvalue, shmlist_elecmp_fn elecmp, void** match) {
 
     int rc = 1;
     shmmutex_lock(&(sl->v->shm->lock));
@@ -210,7 +220,7 @@ int shmlist_extract_first_match_safe(shmlist_t *sl, void* val, shmlist_elecmp_fn
     while (iter != 0) {
         shmlist_ele_t *item = shmvector_at(sl->v, iter);
         void* idata = shmlist_ele_get_data(item);
-        if (0 == elecmp(val, idata)) {
+        if (0 == elecmp(cmpvalue, idata)) {
             /* Splice out iter */
             shmlist_set_next_idx(sl, item->prev_idx, item->next_idx);
             shmlist_set_prev_idx(sl, item->next_idx, item->prev_idx);
@@ -227,6 +237,54 @@ int shmlist_extract_first_match_safe(shmlist_t *sl, void* val, shmlist_elecmp_fn
     }
     shmmutex_unlock(&(sl->v->shm->lock));
     return rc;
+}
+
+/** return an array of matches up to the supplied max */
+int shmlist_extract_n_matches_safe(shmlist_t *sl, size_t match_max, void *cmpvalue, shmlist_elecmp_fn elecmp, 
+								   size_t* elecnt, void **ele) {
+    int rc = 1;
+
+    /* Create an array to hold matching indexes */
+    size_t *idx_matches = calloc(match_max, sizeof(size_t));
+    size_t match_cnt = 0;
+
+    shmmutex_lock(&(sl->v->shm->lock));
+    size_t iter = shmlist_head(sl)->cur_idx_unsafe;
+    while (iter != 0 && match_cnt < match_max) {
+        shmlist_ele_t *item = shmvector_at(sl->v, iter);
+        void* idata = shmlist_ele_get_data(item);
+        if (0 == elecmp(cmpvalue, idata)) {
+            /* Save this matching index for later extraction */
+            idx_matches[match_cnt] = iter;
+            match_cnt++;
+        }
+        iter = shmlist_get_next_idx(sl, iter);
+    }
+
+    /* Extract the matches if any exist*/
+    *elecnt = match_cnt;
+    if (*elecnt > 0) {
+        *ele = calloc(*elecnt, sl->v->shm->esize - sizeof(shmlist_ele_t));
+        for (int i = 0; i < *elecnt; i++) {
+            shmlist_ele_t *item = shmvector_at(sl->v, idx_matches[i]);
+            shmlist_copy_data(sl, (*ele) + i, item);
+
+            /* Splice out the matched item */
+            shmlist_set_next_idx(sl, item->prev_idx, item->next_idx);
+            shmlist_set_prev_idx(sl, item->next_idx, item->prev_idx);
+
+            /* Mark the shared item as available for reuse */
+            shmvector_del(sl->v, item->idx);
+        }
+        rc = 0;
+    }
+    shmmutex_unlock(&(sl->v->shm->lock));
+
+    /* Free local resources */
+    free(idx_matches);
+
+    return rc;
+
 }
 
 /** return the length of the list  */

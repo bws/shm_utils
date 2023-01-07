@@ -1,12 +1,19 @@
 
 #include <gtest/gtest.h>
+#include <string>
 #include "shm_vector.h"
+using namespace std;
+
+static const string shmdir = "/dev/shm";
 
 /* Test empty creation */
-TEST(shmvector, empty_creation) {
+TEST(shmvector, create_empty) {
+    const char* vecname = "/shmvector_create_empty";
+    unlink(string(shmdir + string(vecname)).c_str());
+
 	int rc;
 	shmvector_t sv;
-	rc = shmvector_create(&sv, "/shmvector-empty_allocation", 1, 0);
+	rc = shmvector_create(&sv, vecname, 1, 0);
 	EXPECT_EQ(0, rc);
 	EXPECT_NE((char*)NULL, sv.segname);
 	EXPECT_NE(-1, sv.segd);
@@ -22,9 +29,12 @@ TEST(shmvector, empty_creation) {
 
 /* Test basic destruction */
 TEST(shmvector, basic_destroy) {
+    const char* vecname = "/shmvector_destroy_basic";
+    unlink(string(shmdir + string(vecname)).c_str());
+
 	int rc;
 	shmvector_t sv;
-	rc = shmvector_create(&sv, "/shmvector-basic_destroy", 1, 0);
+	rc = shmvector_create(&sv, vecname, 1, 0);
 	EXPECT_EQ(0, rc);
 	EXPECT_NE((char*)NULL, sv.segname);
 	EXPECT_NE(-1, sv.segd);
@@ -39,10 +49,13 @@ TEST(shmvector, basic_destroy) {
 }
 
 /* Test normal allocation */
-TEST(shmvector, basic_creation) {
+TEST(shmvector, create_basic) {
+    const char* vecname = "/shmvector_create_basic";
+    unlink(string(shmdir + string(vecname)).c_str());
+
 	int rc;
 	shmvector_t sv;
-	rc = shmvector_create(&sv, "/shmvector-basic_creation", 24, 1024);
+	rc = shmvector_create(&sv, vecname, 24, 1024);
 	EXPECT_EQ(0, rc);
 	EXPECT_NE((char*)NULL, sv.segname);
 	EXPECT_NE(-1, sv.segd);
@@ -61,11 +74,13 @@ TEST(shmvector, basic_creation) {
 }
 
 /* Allocate the same vector twice to confirm values are shared */
-TEST(shmvector, shared_creation) {
+TEST(shmvector, create_shared) {
+    const char* vecname = "/shmvector_create_shared";
+    unlink(string(shmdir + string(vecname)).c_str());
 
 	int rc1, rc2;
 	shmvector_t sv1, sv2;
-	rc1 = shmvector_create(&sv1, "/shmvector-shared_allocation", 24, 1024);
+	rc1 = shmvector_create(&sv1, vecname, 24, 1024);
 	EXPECT_EQ(0, rc1);
 	EXPECT_NE((char*)NULL, sv1.segname);
 	EXPECT_NE(-1, sv1.segd);
@@ -77,7 +92,7 @@ TEST(shmvector, shared_creation) {
 	EXPECT_EQ(sizeof(shmarray_t) + 24*1024, sv1.shm->actives_offset);
 
 	/* Confirm the second shared vector has the same contents as the first */
-	rc2 = shmvector_create(&sv2, "/shmvector-shared_allocation", 24, 1024);
+	rc2 = shmvector_create(&sv2, vecname, 24, 1024);
 	EXPECT_EQ(0, rc2);
 	EXPECT_STREQ(sv1.segname, sv2.segname);
 	EXPECT_NE(-1, sv2.segd);
@@ -94,12 +109,14 @@ TEST(shmvector, shared_creation) {
 }
 
 /* Allocate the same vector twice to confirm push_back values are shared */
-TEST(shmvector, simple_safe_push_back) {
+TEST(shmvector, push_back_safe_simple) {
+    const char* vecname = "/shmvector_push_back_safe_simple";
+    unlink(string(shmdir + string(vecname)).c_str());
 
 	int rc1;
 	double val = 1234.1234;
 	shmvector_t sv1;
-	rc1 = shmvector_create(&sv1, "/shmvector-simple_push_back", sizeof(double), 3);
+	rc1 = shmvector_create(&sv1, vecname, sizeof(double), 3);
 	double* eles = (double*)((char*)sv1.shm + sv1.shm->eles_offset);
 	bool* actives = (bool*)((char*)sv1.shm + sv1.shm->actives_offset);
 	EXPECT_EQ(0, rc1);
@@ -139,14 +156,16 @@ TEST(shmvector, simple_safe_push_back) {
 }
 
 /* Allocate the same vector 3x to confirm push_back values are shared */
-TEST(shmvector, shared_safe_push_back) {
+TEST(shmvector, push_back_safe_shared) {
+    const char* vecname = "/shmvector_push_back_safe_shared";
+    unlink(string(shmdir + string(vecname)).c_str());
 
 	int rc1, rc2, rc3;
 	shmvector_t sv1, sv2, sv3;
 
 	/* Create a shared vector and add an element to it */
 	double val1 = 1234.1234;
-	rc1 = shmvector_create(&sv1, "/shmvector-shared_push_back", sizeof(double), 3);
+	rc1 = shmvector_create(&sv1, vecname, sizeof(double), 3);
 	double* eles = (double*)((char*)sv1.shm + sv1.shm->eles_offset);
 	bool* actives = (bool*)((char*)sv1.shm + sv1.shm->actives_offset);
 	EXPECT_EQ(0, rc1);
@@ -167,7 +186,7 @@ TEST(shmvector, shared_safe_push_back) {
 
 	/* Create a second shared vector and push an element onto that */
 	double val2 = 777.77;
-	rc2 = shmvector_create(&sv2, "/shmvector-shared_push_back", sizeof(double), 3);
+	rc2 = shmvector_create(&sv2, vecname, sizeof(double), 3);
 	EXPECT_EQ(0, rc2);
 	EXPECT_NE((char*)NULL, sv2.segname);
 	EXPECT_EQ(3, sv2.shm->capacity);
@@ -186,7 +205,7 @@ TEST(shmvector, shared_safe_push_back) {
 
 	/* Create a 3rd vector and verify early values plus a new value */
 	double val3 = 1.0;
-	rc3 = shmvector_create(&sv3, "/shmvector-shared_push_back", sizeof(double), 3);
+	rc3 = shmvector_create(&sv3, vecname, sizeof(double), 3);
 	EXPECT_EQ(0, rc3);
 	EXPECT_NE((char*)NULL, sv3.segname);
 	EXPECT_EQ(3, sv3.shm->capacity);
@@ -229,11 +248,14 @@ TEST(shmvector, shared_safe_push_back) {
 }
 
 /* Test insertion past the last inserted element */
-TEST(shmvector, shared_insert_at_past) {
+TEST(shmvector, insert_at_shared_past) {
+    const char* vecname = "/shmvector_insert_at_past_shared";
+    unlink(string(shmdir + string(vecname)).c_str());
+
 	int rc1;
 	char ele;
 	shmvector_t sv;
-	shmvector_create(&sv, "/shmvector_shared_insert_at_past", sizeof(char), 10);
+	shmvector_create(&sv, vecname, sizeof(char), 10);
 
 	ele = 'a';
 	rc1 = shmvector_push_back(&sv, &ele);
@@ -253,11 +275,14 @@ TEST(shmvector, shared_insert_at_past) {
 }
 
 /* Test insertion of an element that already exists */
-TEST(shmvector, shared_insert_at_over) {
+TEST(shmvector, insert_at_over_shared) {
+    const char* vecname = "/shmvector_insert_at_over_shared";
+    unlink(string(shmdir + string(vecname)).c_str());
+
 	int rc1;
 	char ele;
 	shmvector_t sv;
-	shmvector_create(&sv, "/shmvector-shared_insert_at_past", sizeof(char), 10);
+	shmvector_create(&sv, vecname, sizeof(char), 10);
 
 	ele = 'a';
 	rc1 = shmvector_push_back(&sv, &ele);
@@ -279,10 +304,13 @@ TEST(shmvector, shared_insert_at_over) {
 
 /* Allocate a vector and confirm insert_quick will push back */
 TEST(shmvector, shared_insert_quick_not_full) {
+    const char* vecname = "/shmvector_insert_quick_not_full";
+    unlink(string(shmdir + string(vecname)).c_str());
+
 	int rc1;
 	char ele;
 	shmvector_t sv;
-	shmvector_create(&sv, "/shmvector-shared_insert_quick_not_full", sizeof(char), 10);
+	shmvector_create(&sv, vecname, sizeof(char), 10);
 
 	int idx = shmvector_insert_quick(&sv);
 	EXPECT_EQ(0, idx);
@@ -297,10 +325,13 @@ TEST(shmvector, shared_insert_quick_not_full) {
 
 /* Allocate a vector and confirm insert_quick will find an empty location */
 TEST(shmvector, shared_insert_quick_is_full) {
+    const char* vecname = "/shmvector_insert_quick_is_full_shared";
+    unlink(string(shmdir + string(vecname)).c_str());
+
 	int rc1;
 	char ele;
 	shmvector_t sv;
-	shmvector_create(&sv, "/shmvector-shared_insert_quick_is_full", sizeof(char), 4);
+	shmvector_create(&sv, vecname, sizeof(char), 4);
 
 	// Fill the entire vector
 	ele = 'a';
@@ -339,9 +370,12 @@ static int test_charcmp(void* l, void* r) {
 }
 
 TEST(shmvector, find_first_of_basic) {
+    const char* vecname = "/shmvector_find_first_of_basic";
+    unlink(string(shmdir + string(vecname)).c_str());
+
 	int rc1;
 	shmvector_t sv;
-	shmvector_create(&sv, "/shmvector_find_first_of_basic", sizeof(char), 4);
+	shmvector_create(&sv, vecname, sizeof(char), 4);
 
 	// Fill the entire vector
 	char ele0 = 'a';
@@ -381,9 +415,12 @@ static int test_dblcmp(void* l, void* r) {
 }
 
 TEST(shmvector, find_first_of_double) {
+    const char* vecname = "/shmvector_find_first_of_double";
+    unlink(string(shmdir + string(vecname)).c_str());
+
 	int rc1;
 	shmvector_t sv;
-	shmvector_create(&sv, "/shmvector_find_first_of_double", sizeof(double), 8);
+	shmvector_create(&sv, vecname, sizeof(double), 8);
 
 	// Fill the entire vector
 	double ele0 = 0.123;
