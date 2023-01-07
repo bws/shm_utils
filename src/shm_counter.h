@@ -22,7 +22,7 @@ extern "C" {
 #endif
 
 /** Number of counters allowed within a set */
-#define SHMCOUNTER_SET_SIZE 1024
+#define SHMCOUNTER_SET_SIZE 96
 
 /** Reserved values that cannot be used within the UID */
 #define SHMCOUNTER_RESERVED_GROUP 0xDEADBEEF
@@ -111,6 +111,13 @@ void shmcounter_inc_safe(shmcounter_t* sc, int val);
  * @param val Amount to increment counter
  */
 void shmcounter_dec_safe(shmcounter_t* sc, int val);
+
+/**
+ * @return true if the value was 0 and the value is now val. Otherwise false.
+ * @param sc Counter struct
+ * @param val Value to set the counter to
+ */
+bool shmcounter_set_if_zero_safe(shmcounter_t* sc, int val);
 
 /** 
  * @return the value of the counter 

@@ -88,6 +88,34 @@ TEST(shmcounter, destroy_basic) {
     shmcounter_set_destroy(&scs);
 }
 
+/* Test basic destruction */
+TEST(shmcounter, destroy_reuse) {
+
+    shmcounter_set_t scs;
+    int rc = shmcounter_set_create(&scs, "/shmcounter_destroy_basic");
+    EXPECT_EQ(0, rc);
+
+    // Create a counter, increment it, and destroy
+    shmcounter_uid_t id1 = {.group = 75, .ctype = 1, .tag = 0, .lid = 4};
+    shmcounter_t sc1;
+    shmcounter_create(&sc1, &scs, id1);
+    EXPECT_EQ(true, shmcounter_isvalue(&sc1, 0));
+    shmcounter_inc_safe(&sc1, 1);
+    EXPECT_EQ(true, shmcounter_isvalue(&sc1, 1));
+    shmcounter_destroy(&sc1);
+
+    // Create a new counter with the same name and id, and ensure the counter is 0
+    shmcounter_t sc2;
+    shmcounter_create(&sc2, &scs, id1);
+    EXPECT_EQ(true, shmcounter_isvalue(&sc2, 0));
+
+    // Ensure that only 1 slot in the counter set has been used
+    EXPECT_EQ(1, scs.v->shm->active_count);
+
+    shmcounter_destroy(&sc2);
+    shmcounter_set_destroy(&scs);
+}
+
 /* Test increment */
 TEST(shmcounter, inc_basic) {
 
@@ -247,4 +275,33 @@ TEST(shmcounter, isequal_safe_basic) {
     shmcounter_destroy(&sc2);
     shmcounter_set_destroy(&scs);
 }
+
+TEST(shmcounter, set_if_zero_safe_basic) {
+
+    shmcounter_set_t scs;
+    int rc = shmcounter_set_create(&scs, "/shmcounter_isequal_basic");
+    EXPECT_EQ(0, rc);
+
+
+    shmcounter_uid_t id1 = {.group = 1, .ctype = 1, .tag = 1, .lid = 1};
+    shmcounter_t sc1;
+    rc = shmcounter_create(&sc1, &scs, id1);
+    EXPECT_EQ(0, rc);
+    EXPECT_EQ(true, shmcounter_isvalue(&sc1, 0));
+    EXPECT_EQ(true, shmcounter_set_if_zero_safe(&sc1, 11));
+    EXPECT_EQ(true, shmcounter_isvalue(&sc1, 11));
+
+    shmcounter_t sc1_copy;
+    rc = shmcounter_create(&sc1_copy, &scs, id1);
+    EXPECT_EQ(0, rc);
+    EXPECT_EQ(true, shmcounter_isvalue(&sc1, 11));
+    EXPECT_EQ(false, shmcounter_set_if_zero_safe(&sc1, 4));
+    EXPECT_EQ(true, shmcounter_isvalue(&sc1, 11));
+
+    // Cleanup
+    shmcounter_destroy(&sc1);
+    shmcounter_destroy(&sc1_copy);
+    shmcounter_set_destroy(&scs);
+}
+
 

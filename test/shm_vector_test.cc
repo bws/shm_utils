@@ -15,8 +15,8 @@ TEST(shmvector, empty_creation) {
 	EXPECT_EQ(0, sv.shm->capacity);
 	EXPECT_EQ(1, sv.shm->esize);
 	EXPECT_EQ(0, sv.shm->active_count);
-	EXPECT_NE((void*)NULL, sv.shm->eles);
-	EXPECT_NE((bool*)NULL, sv.shm->actives);
+	EXPECT_EQ(sizeof(shmarray_t), sv.shm->eles_offset);
+	EXPECT_EQ(sizeof(shmarray_t), sv.shm->actives_offset);
 	shmvector_destroy(&sv);
 }
 
@@ -33,8 +33,8 @@ TEST(shmvector, basic_destroy) {
 	EXPECT_EQ(0, sv.shm->capacity);
 	EXPECT_EQ(1, sv.shm->esize);
 	EXPECT_EQ(0, sv.shm->active_count);
-	EXPECT_NE((void*)NULL, sv.shm->eles);
-	EXPECT_NE((bool*)NULL, sv.shm->actives);
+	EXPECT_EQ(sizeof(shmarray_t), sv.shm->eles_offset);
+	EXPECT_EQ(sizeof(shmarray_t), sv.shm->actives_offset);
 	shmvector_destroy(&sv);
 }
 
@@ -50,12 +50,12 @@ TEST(shmvector, basic_creation) {
 	EXPECT_EQ(1024, sv.shm->capacity);
 	EXPECT_EQ(24, sv.shm->esize);
 	EXPECT_EQ(0, sv.shm->active_count);
-	EXPECT_NE((void*)NULL, sv.shm->eles);
-	EXPECT_NE((bool*)NULL, sv.shm->actives);
+	EXPECT_EQ(sizeof(shmarray_t), sv.shm->eles_offset);
+	EXPECT_EQ(sizeof(shmarray_t) + 24*1024, sv.shm->actives_offset);
 
 	for (int i = 0; i < 1024; i++) {
-		EXPECT_EQ(0, *( ((char*)sv.shm->eles) + i*24));
-		EXPECT_EQ(false, sv.shm->actives[i]);
+		EXPECT_EQ(0, *( ((char*)sv.shm + sv.shm->eles_offset) + i*24));
+		EXPECT_EQ(false, ((bool*)((char*)sv.shm + sv.shm->actives_offset))[i]);
 	}
 	shmvector_destroy(&sv);
 }
@@ -73,8 +73,8 @@ TEST(shmvector, shared_creation) {
 	EXPECT_EQ(1024, sv1.shm->capacity);
 	EXPECT_EQ(24, sv1.shm->esize);
 	EXPECT_EQ(0, sv1.shm->active_count);
-	EXPECT_NE((void*)NULL, sv1.shm->eles);
-	EXPECT_NE((bool*)NULL, sv1.shm->actives);
+	EXPECT_EQ(sizeof(shmarray_t), sv1.shm->eles_offset);
+	EXPECT_EQ(sizeof(shmarray_t) + 24*1024, sv1.shm->actives_offset);
 
 	/* Confirm the second shared vector has the same contents as the first */
 	rc2 = shmvector_create(&sv2, "/shmvector-shared_allocation", 24, 1024);
@@ -85,8 +85,8 @@ TEST(shmvector, shared_creation) {
 	EXPECT_EQ(sv1.shm->capacity, sv2.shm->capacity);
 	EXPECT_EQ(sv1.shm->esize, sv2.shm->esize);
 	EXPECT_EQ(sv1.shm->active_count, sv2.shm->active_count);
-	EXPECT_EQ(sv1.shm->eles, sv1.shm->eles);
-	EXPECT_EQ(sv1.shm->actives, sv2.shm->actives);
+	EXPECT_EQ(sv1.shm->eles_offset, sv2.shm->eles_offset);
+	EXPECT_EQ(sv1.shm->actives_offset, sv2.shm->actives_offset);
 	
 	/* Destroy can be safely called multiple times */
 	shmvector_destroy(&sv1);
@@ -100,6 +100,8 @@ TEST(shmvector, simple_safe_push_back) {
 	double val = 1234.1234;
 	shmvector_t sv1;
 	rc1 = shmvector_create(&sv1, "/shmvector-simple_push_back", sizeof(double), 3);
+	double* eles = (double*)((char*)sv1.shm + sv1.shm->eles_offset);
+	bool* actives = (bool*)((char*)sv1.shm + sv1.shm->actives_offset);
 	EXPECT_EQ(0, rc1);
 	EXPECT_NE((char*)NULL, sv1.segname);
 	EXPECT_EQ(3, sv1.shm->capacity);
@@ -109,28 +111,28 @@ TEST(shmvector, simple_safe_push_back) {
 	rc1 = shmvector_safe_push_back(&sv1, &val);
 	EXPECT_EQ(3, sv1.shm->capacity);
 	EXPECT_EQ(1, sv1.shm->active_count);
-	EXPECT_EQ(val, ((double*)sv1.shm->eles)[0]);
-	EXPECT_EQ(true, sv1.shm->actives[0]);
-	EXPECT_EQ(false, sv1.shm->actives[1]);
-	EXPECT_EQ(false, sv1.shm->actives[2]);
+	EXPECT_EQ(val, eles[0]);
+	EXPECT_EQ(true, actives[0]);
+	EXPECT_EQ(false, actives[1]);
+	EXPECT_EQ(false, actives[2]);
 
 	val = 777.77;
 	rc1 = shmvector_safe_push_back(&sv1, &val);
 	EXPECT_EQ(3, sv1.shm->capacity);
 	EXPECT_EQ(2, sv1.shm->active_count);
-	EXPECT_EQ(val, ((double*)sv1.shm->eles)[1]);
-	EXPECT_EQ(true, sv1.shm->actives[0]);
-	EXPECT_EQ(true, sv1.shm->actives[1]);
-	EXPECT_EQ(false, sv1.shm->actives[2]);
+	EXPECT_EQ(val, eles[1]);
+	EXPECT_EQ(true, actives[0]);
+	EXPECT_EQ(true, actives[1]);
+	EXPECT_EQ(false, actives[2]);
 
 	val = 1.0;
 	rc1 = shmvector_safe_push_back(&sv1, &val);
 	EXPECT_EQ(3, sv1.shm->capacity);
 	EXPECT_EQ(3, sv1.shm->active_count);
-	EXPECT_EQ(val, ((double*)sv1.shm->eles)[2]);
-	EXPECT_EQ(true, sv1.shm->actives[0]);
-	EXPECT_EQ(true, sv1.shm->actives[1]);
-	EXPECT_EQ(true, sv1.shm->actives[2]);
+	EXPECT_EQ(val, eles[2]);
+	EXPECT_EQ(true, actives[0]);
+	EXPECT_EQ(true, actives[1]);
+	EXPECT_EQ(true, actives[2]);
 
 	shmvector_destroy(&sv1);
 
@@ -145,6 +147,8 @@ TEST(shmvector, shared_safe_push_back) {
 	/* Create a shared vector and add an element to it */
 	double val1 = 1234.1234;
 	rc1 = shmvector_create(&sv1, "/shmvector-shared_push_back", sizeof(double), 3);
+	double* eles = (double*)((char*)sv1.shm + sv1.shm->eles_offset);
+	bool* actives = (bool*)((char*)sv1.shm + sv1.shm->actives_offset);
 	EXPECT_EQ(0, rc1);
 	EXPECT_NE((char*)NULL, sv1.segname);
 	EXPECT_EQ(3, sv1.shm->capacity);
@@ -154,12 +158,12 @@ TEST(shmvector, shared_safe_push_back) {
 	rc1 = shmvector_safe_push_back(&sv1, &val1);
 	EXPECT_EQ(3, sv1.shm->capacity);
 	EXPECT_EQ(1, sv1.shm->active_count);
-	EXPECT_EQ(val1, ((double*)sv1.shm->eles)[0]);
-	EXPECT_EQ(0.0, ((double*)sv1.shm->eles)[1]);
-	EXPECT_EQ(0.0, ((double*)sv1.shm->eles)[2]);
-	EXPECT_EQ(true, sv1.shm->actives[0]);
-	EXPECT_EQ(false, sv1.shm->actives[1]);
-	EXPECT_EQ(false, sv1.shm->actives[2]);
+	EXPECT_EQ(val1, eles[0]);
+	EXPECT_EQ(0.0, eles[1]);
+	EXPECT_EQ(0.0, eles[2]);
+	EXPECT_EQ(true, actives[0]);
+	EXPECT_EQ(false, actives[1]);
+	EXPECT_EQ(false, actives[2]);
 
 	/* Create a second shared vector and push an element onto that */
 	double val2 = 777.77;
@@ -173,12 +177,12 @@ TEST(shmvector, shared_safe_push_back) {
 	rc2 = shmvector_safe_push_back(&sv2, &val2);
 	EXPECT_EQ(3, sv2.shm->capacity);
 	EXPECT_EQ(2, sv2.shm->active_count);
-	EXPECT_EQ(val1, ((double*)sv2.shm->eles)[0]);
-	EXPECT_EQ(val2, ((double*)sv2.shm->eles)[1]);
-	EXPECT_EQ(0.0, ((double*)sv2.shm->eles)[2]);
-	EXPECT_EQ(true, sv2.shm->actives[0]);
-	EXPECT_EQ(true, sv2.shm->actives[1]);
-	EXPECT_EQ(false, sv2.shm->actives[2]);
+	EXPECT_EQ(val1, eles[0]);
+	EXPECT_EQ(val2, eles[1]);
+	EXPECT_EQ(0.0, eles[2]);
+	EXPECT_EQ(true, actives[0]);
+	EXPECT_EQ(true, actives[1]);
+	EXPECT_EQ(false, actives[2]);
 
 	/* Create a 3rd vector and verify early values plus a new value */
 	double val3 = 1.0;
@@ -192,31 +196,31 @@ TEST(shmvector, shared_safe_push_back) {
 	rc1 = shmvector_safe_push_back(&sv3, &val3);
 	EXPECT_EQ(3, sv3.shm->capacity);
 	EXPECT_EQ(3, sv3.shm->active_count);
-	EXPECT_EQ(val1, ((double*)sv3.shm->eles)[0]);
-	EXPECT_EQ(val2, ((double*)sv3.shm->eles)[1]);
-	EXPECT_EQ(val3, ((double*)sv3.shm->eles)[2]);
-	EXPECT_EQ(true, sv3.shm->actives[0]);
-	EXPECT_EQ(true, sv3.shm->actives[1]);
-	EXPECT_EQ(true, sv3.shm->actives[2]);
+	EXPECT_EQ(val1, eles[0]);
+	EXPECT_EQ(val2, eles[1]);
+	EXPECT_EQ(val3, eles[2]);
+	EXPECT_EQ(true, actives[0]);
+	EXPECT_EQ(true, actives[1]);
+	EXPECT_EQ(true, actives[2]);
 
 	/* Confirm the first 2 instances have the same data as the third */
 	EXPECT_EQ(3, sv1.shm->capacity);
 	EXPECT_EQ(3, sv1.shm->active_count);
-	EXPECT_EQ(val1, ((double*)sv1.shm->eles)[0]);
-	EXPECT_EQ(val2, ((double*)sv1.shm->eles)[1]);
-	EXPECT_EQ(val3, ((double*)sv1.shm->eles)[2]);
-	EXPECT_EQ(true, sv1.shm->actives[0]);
-	EXPECT_EQ(true, sv1.shm->actives[1]);
-	EXPECT_EQ(true, sv1.shm->actives[2]);
+	EXPECT_EQ(val1, eles[0]);
+	EXPECT_EQ(val2, eles[1]);
+	EXPECT_EQ(val3, eles[2]);
+	EXPECT_EQ(true, actives[0]);
+	EXPECT_EQ(true, actives[1]);
+	EXPECT_EQ(true, actives[2]);
 
 	EXPECT_EQ(3, sv2.shm->capacity);
 	EXPECT_EQ(3, sv2.shm->active_count);
-	EXPECT_EQ(val1, ((double*)sv2.shm->eles)[0]);
-	EXPECT_EQ(val2, ((double*)sv2.shm->eles)[1]);
-	EXPECT_EQ(val3, ((double*)sv2.shm->eles)[2]);
-	EXPECT_EQ(true, sv2.shm->actives[0]);
-	EXPECT_EQ(true, sv2.shm->actives[1]);
-	EXPECT_EQ(true, sv2.shm->actives[2]);
+	EXPECT_EQ(val1, eles[0]);
+	EXPECT_EQ(val2, eles[1]);
+	EXPECT_EQ(val3, eles[2]);
+	EXPECT_EQ(true, actives[0]);
+	EXPECT_EQ(true, actives[1]);
+	EXPECT_EQ(true, actives[2]);
 
 	/* Destroy all 3 shared instances */
 	shmvector_destroy(&sv1);
@@ -229,7 +233,7 @@ TEST(shmvector, shared_insert_at_past) {
 	int rc1;
 	char ele;
 	shmvector_t sv;
-	shmvector_create(&sv, "/shmvector-shared_insert_at_past", sizeof(char), 10);
+	shmvector_create(&sv, "/shmvector_shared_insert_at_past", sizeof(char), 10);
 
 	ele = 'a';
 	rc1 = shmvector_push_back(&sv, &ele);

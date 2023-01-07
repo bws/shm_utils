@@ -45,25 +45,29 @@ TEST(shmlist, add_tail_safe_basic) {
     std::cerr << "Curr: " << sl1.cur_idx_unsafe << std::endl;
 
     char ele[5] = "abcd";
-    shmlist_add_tail_safe(&sl1, &ele[0]);
+    int rc = shmlist_add_tail_safe(&sl1, &ele[0]);
+    EXPECT_EQ(0, rc);
     EXPECT_EQ(1, shmlist_length(&sl1));
     char e0 = ((char*)shmlist_get_data(shmlist_tail(&sl1)))[0];
     EXPECT_EQ(ele[0], e0);
     EXPECT_EQ(1, sl1.cur_idx_unsafe);
     
-    shmlist_add_tail_safe(&sl1, &ele[1]);
+    rc = shmlist_add_tail_safe(&sl1, &ele[1]);
+    EXPECT_EQ(0, rc);
     EXPECT_EQ(2, shmlist_length(&sl1));
     char e1 = ((char*)shmlist_get_data(shmlist_tail(&sl1)))[0];
     EXPECT_EQ(ele[1], e1);
     EXPECT_EQ(2, sl1.cur_idx_unsafe);
 
-    shmlist_add_tail_safe(&sl1, &ele[2]);
+    rc = shmlist_add_tail_safe(&sl1, &ele[2]);
+    EXPECT_EQ(0, rc);
     EXPECT_EQ(3, shmlist_length(&sl1));
     char e2 = ((char*)shmlist_get_data(shmlist_tail(&sl1)))[0];
     EXPECT_EQ(ele[2], e2);
     EXPECT_EQ(3, sl1.cur_idx_unsafe);
 
-    shmlist_add_tail_safe(&sl1, &ele[3]);
+    rc = shmlist_add_tail_safe(&sl1, &ele[3]);
+    EXPECT_EQ(0, rc);
     EXPECT_EQ(4, shmlist_length(&sl1));
     char e3 = ((char*)shmlist_get_data(shmlist_tail(&sl1)))[0];
     EXPECT_EQ(ele[3], e3);
@@ -191,7 +195,9 @@ TEST(shmlist, shmlist_is_empty_basic) {
 
     // Add 1 element and test
     char ele = 'a';
-    shmlist_add_tail_safe(&sl1, &ele);
+    int rc = shmlist_add_tail_safe(&sl1, &ele);
+    EXPECT_EQ(0, rc);
+    EXPECT_EQ(1, sl1.cur_idx_unsafe);
     EXPECT_EQ(0, shmlist_is_empty(&sl1));
 
     // Delete 1 element and test 

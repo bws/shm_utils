@@ -17,34 +17,38 @@ typedef struct shmlist_element {
     /* Previous */
     size_t prev_idx;
 
-	/* Pointer to just the data element */
-	void* data;
+	/* Pointer to just the data element -- may not be valid */
+	void* data_unsafe;
 } shmlist_ele_t;
 
 /* Return the data within vector element */
 static void* shmlist_ele_get_data(void* v_ele) {
     shmlist_ele_t *ele = v_ele;
-    ele->data = v_ele + sizeof(shmlist_ele_t);
+    ele->data_unsafe = v_ele + sizeof(shmlist_ele_t);
     return (v_ele + sizeof(shmlist_ele_t));
 }
 
 static inline size_t shmlist_get_next_idx(shmlist_t *sl, size_t idx) {
     shmlist_ele_t *li = shmvector_at(sl->v, idx);
+    assert(li);
     return li->next_idx;
 }
     
 static inline size_t shmlist_get_prev_idx(shmlist_t *sl, size_t idx) {
     shmlist_ele_t *li = shmvector_at(sl->v, idx);
+    assert(li);
     return li->prev_idx;
 }
     
 static inline size_t shmlist_set_next_idx(shmlist_t *sl, size_t idx, size_t val) {
     shmlist_ele_t *li = shmvector_at(sl->v, idx);
+    assert(li);
     li->next_idx = val;
 }
     
 static inline size_t shmlist_set_prev_idx(shmlist_t *sl, size_t idx, size_t val) {
     shmlist_ele_t *li = shmvector_at(sl->v, idx);
+    assert(li);
     li->prev_idx = val;
 }
 
@@ -54,8 +58,8 @@ static void shmlist_create_tail(shmlist_t *sl, size_t idx, void *ntail, void *el
     t_ele->idx = idx;
     t_ele->next_idx = 0;
     t_ele->prev_idx = shmlist_get_prev_idx(sl, 0);
-    t_ele->data = (void*)ntail + sizeof(shmlist_ele_t);
-    memcpy(t_ele->data, ele_data, sl->v->shm->esize);
+    t_ele->data_unsafe = t_ele + 1;
+    memcpy(t_ele + 1, ele_data, sl->v->shm->esize - sizeof(shmlist_ele_t));
 }
 
 /* Allocate and fill the buffer with the element from the list node */

@@ -10,6 +10,17 @@
 #include <unistd.h>
 #include "shm_vector.h"
 
+/** Return a pointer to the array elements */
+static inline void* shmarray_get_eles(shmarray_t *sa) {
+    return ((void*)sa + sa->eles_offset);
+}
+
+/** Return a pointer to the array elements */
+static inline bool* shmarray_get_actives(shmarray_t *sa) {
+    void* actives = ((void*)sa + sa->actives_offset);
+    return (bool*)actives;
+}
+
 /** Allocate space in shared memory for an array of size N */
 int shmvector_create(shmvector_t *sv, const char* segname, size_t elesz, size_t sz) {
 	int rc = 0;
@@ -35,7 +46,7 @@ int shmvector_create(shmvector_t *sv, const char* segname, size_t elesz, size_t 
         sv->shm = mmap(offsetof(shmarray_t, lock), sizeof(shmmutex_t), 
                                 PROT_READ|PROT_WRITE, MAP_SHARED, sv->segd, 0);
         if (sv->shm == MAP_FAILED) {
-            fprintf(stderr, "ERROR: MMap to acquire lock failed\n");
+            fprintf(stderr, "ERROR: MMap to acquire existing lock failed\n");
             close(sv->segd);
             rc = 1;
         }
@@ -71,12 +82,13 @@ int shmvector_create(shmvector_t *sv, const char* segname, size_t elesz, size_t 
             sv->shm->esize = elesz;
             sv->shm->active_count = 0;
             sv->shm->next_back_idx = 0;
-            sv->shm->eles = (void*)(sv->shm + 1);
-            sv->shm->actives = (void*)sv->shm->eles + ((sz + 1) * elesz);
+            sv->shm->eles_offset = sizeof(shmarray_t);
+            sv->shm->actives_offset = sv->shm->eles_offset + (sz * elesz);
 
             /* Create the mutex as the last step to unblock other processes */
             shmmutex_create(&sv->shm->lock);
         } else {
+            fprintf(stderr, "ERROR: MMap failed while creating shared array\n");
             close(sv->segd);
             rc = 1;
         }
@@ -98,20 +110,10 @@ int shmvector_destroy(shmvector_t *sv) {
 
 int shmvector_destroy_safe(shmvector_t *sv) {
     /* Take the lock */
-    fprintf(stderr, "shmvector_destroy_safe called. It may not free all resources.\n");
+    fprintf(stderr, "WARNING: shmvector_destroy_safe called. It may not free all resources.\n");
     shmmutex_lock(&(sv->shm->lock));
-
-    if (0 == shmvector_size(sv)) {
-        /* FIXME: Disable the lock */
-        //shmmutex_destroy(&sv->shm->lock);
-
-        /* Free resources */
-        shm_unlink(sv->segname);
-    }
-    //else {
-        /* Vector still contains data, just clean up locally */
-       shmmutex_unlock(&(sv->shm->lock));
-    //}
+    shm_unlink(sv->segname);
+    shmmutex_unlock(&(sv->shm->lock));
 
     /* Perform local cleanup */
     size_t segsize = sizeof(shmarray_t) + (sv->shm->capacity * sv->shm->esize) + 
@@ -130,11 +132,11 @@ size_t shmvector_find_first_of(shmvector_t *sv, void* data, shmvector_elecmp_fn 
     /* Search for an entry not marked active */
     size_t last_active_idx = 0;
     for (int i = 0; i < sv->shm->capacity; i++) {
-        //fprintf(stderr, "i %d act %d add %p\n", i, sv->shm->actives[i], sv->shm->eles + i);
-        if (true == sv->shm->actives[i]) {
-            //fprintf(stderr, "Examining active i %d act %d add %p\n", i, sv->shm->actives[i], sv->shm->eles + i*sv->shm->esize);
+        bool* actives = shmarray_get_actives(sv->shm);
+        if (true == actives[i]) {
             last_active_idx = i+1;
-            if (0 == elecmp(data, sv->shm->eles + (i * sv->shm->esize))) {
+            void* eles = shmarray_get_eles(sv->shm);
+            if (0 == elecmp(data, eles + (i * sv->shm->esize))) {
                 last_active_idx = i;
                 break;
             }
@@ -156,10 +158,12 @@ int shmvector_safe_push_back(shmvector_t* sv, void* ele) {
 int shmvector_push_back(shmvector_t* sv, void* ele) {
 	int idx = -1;
 	if (sv->shm->next_back_idx < sv->shm->capacity) {
-		void* buf_offset = sv->shm->eles + (sv->shm->esize * sv->shm->next_back_idx);
+        void* eles = shmarray_get_eles(sv->shm);
+        bool* actives = shmarray_get_actives(sv->shm);
+		void* buf_offset = eles + (sv->shm->esize * sv->shm->next_back_idx);
 		buf_offset = memcpy(buf_offset, ele, sv->shm->esize);
+		actives[sv->shm->next_back_idx] = true;
         idx = sv->shm->next_back_idx;
-		sv->shm->actives[sv->shm->next_back_idx] = true;
 		sv->shm->next_back_idx++;
 		sv->shm->active_count++;
 	}
@@ -170,11 +174,13 @@ int shmvector_push_back(shmvector_t* sv, void* ele) {
 int shmvector_insert_at(shmvector_t* sv, size_t idx, void* ele) {
     int rc = -1;
 	if (idx < sv->shm->capacity) {
-		void* buf_offset = sv->shm->eles + (sv->shm->esize * idx);
+        void* eles = shmarray_get_eles(sv->shm);
+        bool* actives = shmarray_get_actives(sv->shm);
+		void* buf_offset = eles + (sv->shm->esize * idx);
 		buf_offset = memcpy(buf_offset, ele, sv->shm->esize);
         /* Update the active count and last_idx if required */
-        if (!sv->shm->actives[idx]) {
-		    sv->shm->actives[idx] = true;
+        if (!actives[idx]) {
+		    actives[idx] = true;
 		    sv->shm->active_count++;
         }
         if (idx >= sv->shm->next_back_idx) {
@@ -197,14 +203,16 @@ void* shmvector_safe_at(shmvector_t* sv, size_t idx) {
 /** Return a pointer to the element at idx */
 void* shmvector_at(shmvector_t* sv, size_t idx) {
 	void *val = 0;
-	if (sv->shm->next_back_idx > idx && true == sv->shm->actives[idx]) {
-        val = sv->shm->eles + (sv->shm->esize * idx);
+    bool *actives = shmarray_get_actives(sv->shm);
+	if (sv->shm->next_back_idx > idx && true == actives[idx]) {
+        void *eles = shmarray_get_eles(sv->shm);
+        val = eles + (sv->shm->esize * idx);
 	}
 	return val;
 }
 
 
-/* Perform a push back if possible, otherwise search for an empty slot */
+/* Perform an empty push back if possible, otherwise search for an empty slot */
 int shmvector_insert_quick(shmvector_t* sv) {
     int idx = -1;
     /* If the vector has space find a location to insert this element */
@@ -212,30 +220,34 @@ int shmvector_insert_quick(shmvector_t* sv) {
         /* If space is avilable at the back of the list, use that */
         if (sv->shm->next_back_idx < sv->shm->capacity) {
             idx = sv->shm->next_back_idx;
-            sv->shm->actives[sv->shm->next_back_idx] = true;
+            bool *actives = shmarray_get_actives(sv->shm);
+            actives[sv->shm->next_back_idx] = true;
             sv->shm->next_back_idx++;
             sv->shm->active_count++;
         }
         else {
             /* back insertion failed so search for an entry not marked active */
+            bool *actives = shmarray_get_actives(sv->shm);
             for (int i = 0; i < sv->shm->capacity; i++) {
-                if (!(sv->shm->actives[i])) {
+                if (!(actives[i])) {
                     idx = i;
-                    sv->shm->actives[i] = true;
+                    actives[i] = true;
                     sv->shm->active_count++;
                     break;
                 }
             }
         }
     }
+    bool *actives = shmarray_get_actives(sv->shm);
     return idx;
 }
 
 /* If the element at idx exists, mark it available */
 int shmvector_del(shmvector_t* sv, size_t idx) {
     int rc = -1;
-    if (sv->shm->actives[idx]) {
-        sv->shm->actives[idx] = false;
+    bool *actives = shmarray_get_actives(sv->shm);
+    if (actives[idx]) {
+        actives[idx] = false;
         sv->shm->active_count--;
         rc = 0;
     }

@@ -57,11 +57,11 @@ typedef struct shmarray {
 	/* Number of allocated buffers in use */
 	size_t active_count;
 
-	/* Array of shared memory array buffers */
-	void* eles;
+	/* Offset from the beginning of this struct to the array of shared memory array buffers */
+	size_t eles_offset;
 
-	/* Array of booleans indicating whether a buffer is active */
-	bool* actives;
+	/* Offset from the beginning of this struct to the array of booleans indicating whether a buffer is active */
+	size_t actives_offset;
 } shmarray_t;
 
 /**

@@ -67,11 +67,13 @@ int shmcounter_create(shmcounter_t *sc, shmcounter_set_t *scs, shmcounter_uid_t 
 	int idx = shmvector_find_first_of(scs->v, &cid, &shmcounter_uidcmp);
 	if (idx == sz) {
 		shmcounter_data_t d = {.mutex = 0, .id = cid, .count = 0, .refcount = 0};
-		size_t newidx = shmvector_insert_at(scs->v, idx, &d);
-		if (newidx != idx) {
+		size_t newidx = shmvector_insert_quick(scs->v);
+		if (newidx < 0) {
 			fprintf(stderr, "ERROR: Could not insert new counter\n");
 			rc = 1;
 		}
+		newidx = shmvector_insert_at(scs->v, newidx, &d);
+		idx = newidx;
 	}
 
 	/* Initialize the counter mutex and increment refcount */
@@ -141,6 +143,26 @@ void shmcounter_dec_safe(shmcounter_t* sc, int val) {
 
 	/* End vector critical section */
 	shmmutex_unlock(&(sc->set->v->shm->lock));
+}
+
+/** Set the counter to value if the counter is 0. Return true if the value was updated. */
+bool shmcounter_set_if_zero_safe(shmcounter_t* sc, int val) {
+	bool value_set = false;
+	/* Lock the vector to prevent deletion */
+	shmmutex_lock(&(sc->set->v->shm->lock));
+
+	/* Lock the counter */
+	shmcounter_data_t *d = shmvector_at(sc->set->v, sc->idx);
+	shmmutex_lock(&(d->mutex));
+	if (0 == d->count) {
+		d->count = val;
+		value_set = true;
+	}
+	shmmutex_unlock(&(d->mutex));
+
+	/* End vector critical section */
+	shmmutex_unlock(&(sc->set->v->shm->lock));
+	return value_set;
 }
 
 /** return the value of the counter */
