@@ -46,7 +46,7 @@ int shmcounter_set_create(shmcounter_set_t *scs, const char* counterset) {
 
 /** Release resources associated with this shared memory list */
 int shmcounter_set_destroy(shmcounter_set_t *scs) {
-	/* If the vector is completely empty, delete it */
+	/* If the vector is not in use, delete it */
 	shmvector_destroy_safe(scs->v);
 	/* Release local resources */
 	free(scs->v);
@@ -65,17 +65,19 @@ int shmcounter_create(shmcounter_t *sc, shmcounter_set_t *scs, shmcounter_uid_t 
 	/* Search the vector for the supplied id, create it if required */
 	int sz = shmvector_size(scs->v);
 	int idx = shmvector_find_first_of(scs->v, &cid, &shmcounter_uidcmp);
-	if (idx == sz) {
-		shmcounter_data_t d = {.mutex = 0, .id = cid, .count = 0, .refcount = 0};
+	if (idx < 0) {
 		size_t newidx = shmvector_insert_quick(scs->v);
 		if (newidx < 0) {
 			fprintf(stderr, "ERROR: Could not insert new counter\n");
-			rc = 1;
+			rc = 1;			
 		}
-		newidx = shmvector_insert_at(scs->v, newidx, &d);
-		idx = newidx;
+		else {
+			shmcounter_data_t *slot = shmvector_at(scs->v, newidx);
+			shmcounter_data_t d = {.mutex = 0, .id = cid, .count = 0, .refcount = 0};
+			*slot = d;
+			idx = newidx;
+		}
 	}
-
 	/* Initialize the counter mutex and increment refcount */
 	if (0 == rc) {
 		shmcounter_data_t *cd = shmvector_at(scs->v, idx);
@@ -104,7 +106,8 @@ int shmcounter_destroy(shmcounter_t *sc) {
 	shmcounter_data_t *cd = shmvector_at(sc->set->v, sc->idx);
 	shmmutex_lock(&(cd->mutex));
 	if (1 == cd->refcount) {
-		/* No need to unlock, just set the data to 0 and delete idx */
+		/* Destroy the counter mutex, set the data to 0, and return the memory */
+		shmmutex_destroy_if_locked(&(cd->mutex));
 		memset(cd, 0, sizeof(shmcounter_data_t));
 		shmvector_del(sc->set->v, sc->idx);
 	} else {

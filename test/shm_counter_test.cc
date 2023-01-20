@@ -77,6 +77,7 @@ TEST(shmcounter, create_simple) {
     shmcounter_set_destroy(&scs);
 }
 
+
 /* Test basic destruction */
 TEST(shmcounter, destroy_basic) {
 

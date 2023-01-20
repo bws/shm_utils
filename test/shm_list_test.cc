@@ -137,7 +137,6 @@ int basic_char_cmp(void* lhs, void* rhs) {
     return 1;
 }
 
-
 TEST(shmlist, extract_first_match_safe_basic) {
     const char* listname = "/shmlist_extract_first_match_safe_basic";
     unlink(string(shmdir + string(listname)).c_str());
@@ -275,6 +274,95 @@ TEST(shmlist, extract_n_matches_safe_basic) {
     EXPECT_EQ('c', e2);
     e3 = ((char*)shmlist_get_data(shmlist_next(&sl)))[0];
     EXPECT_EQ('d', e3);
+
+    shmlist_destroy(&sl);
+}
+
+struct shmlist_test_kv_pair { char key; double value[16]; };
+
+int shmlist_test_key_cmp(void* lhs, void* rhs) {
+    char* l = (char*)lhs;
+    struct shmlist_test_kv_pair *r = (struct shmlist_test_kv_pair*)rhs;
+    std::cerr << "lhs: " << l[0] << " rhs: " << r->key << std::endl;
+    if (l[0] == r->key) {
+        return 0;
+    }
+    return 1;
+}
+
+TEST(shmlist, extract_n_matches_safe_match_all) {
+    const char* listname = "/shmlist_extract_n_matches_safe_match_all";
+    unlink(string(shmdir + string(listname)).c_str());
+
+    shmlist_t sl;
+    shmlist_create(&sl, listname, sizeof(struct shmlist_test_kv_pair), 1024);
+    fprintf(stderr, "Size of kv: %d\n", sizeof(struct shmlist_test_kv_pair));
+    // Prepopulate the list with 4 elements 
+    struct shmlist_test_kv_pair kvs[4] = { {'a', {0}}, {'a', {0}}, {'a', {0}}, {'a', {0}} };
+    kvs[0].value[15] = 1.1;
+    kvs[1].value[15] = 2.2;
+    kvs[2].value[15] = 3.3;
+    kvs[3].value[15] = 4.4;
+    shmlist_add_tail_safe(&sl, &kvs[0]);
+    shmlist_add_tail_safe(&sl, &kvs[1]);
+    shmlist_add_tail_safe(&sl, &kvs[2]);
+    shmlist_add_tail_safe(&sl, &kvs[3]);
+    struct shmlist_test_kv_pair *e0 = ((struct shmlist_test_kv_pair*)shmlist_get_data(shmlist_head(&sl)));
+    struct shmlist_test_kv_pair *e1 = ((struct shmlist_test_kv_pair*)shmlist_get_data(shmlist_next(&sl)));
+    struct shmlist_test_kv_pair *e2 = ((struct shmlist_test_kv_pair*)shmlist_get_data(shmlist_next(&sl)));
+    struct shmlist_test_kv_pair *e3 = ((struct shmlist_test_kv_pair*)shmlist_get_data(shmlist_next(&sl)));
+    EXPECT_EQ('a', e0->key);
+    EXPECT_EQ(1.1, e0->value[15]);
+    EXPECT_EQ('a', e1->key);
+    EXPECT_EQ(2.2, e1->value[15]);
+    EXPECT_EQ('a', e2->key);
+    EXPECT_EQ(3.3, e2->value[15]);
+    EXPECT_EQ('a', e3->key);
+    EXPECT_EQ(4.4, e3->value[15]);
+ 
+    // Match all of the 'a' element in the list
+    char a = 'a';
+    size_t max_match = 8;
+    size_t match_count;
+    struct shmlist_test_kv_pair* matches;
+    int rc = shmlist_extract_n_matches_safe(&sl, max_match, &a, shmlist_test_key_cmp, &match_count, (void**)&matches);
+    EXPECT_EQ(0, rc);
+    EXPECT_EQ(0, shmlist_length(&sl));
+    EXPECT_EQ(true, shmlist_is_empty(&sl));
+    EXPECT_EQ(4, match_count);
+    EXPECT_EQ('a', matches[0].key);
+    EXPECT_EQ(1.1, matches[0].value[15]);
+    EXPECT_EQ('a', matches[1].key);
+    EXPECT_EQ(2.2, matches[1].value[15]);
+    EXPECT_EQ('a', matches[2].key);
+    EXPECT_EQ(3.3, matches[2].value[15]);
+    EXPECT_EQ('a', matches[3].key);
+    EXPECT_EQ(4.4, matches[3].value[15]);
+    free(matches);
+
+    // Now populate the list again, and match again 
+    struct shmlist_test_kv_pair kvs2[4] = { {'x', {0}}, {'x', {0}}, {'x', {0}}, {'x', {0}} };
+    kvs2[0].value[0] = 1.1;
+    kvs2[1].value[0] = 2.2;
+    kvs2[2].value[0] = 3.3;
+    kvs2[3].value[0] = 4.4;
+    shmlist_add_tail_safe(&sl, &kvs2[0]);
+    shmlist_add_tail_safe(&sl, &kvs2[1]);
+    shmlist_add_tail_safe(&sl, &kvs2[2]);
+    shmlist_add_tail_safe(&sl, &kvs2[3]);
+
+    char x = 'x';
+    max_match = 8;
+    rc = shmlist_extract_n_matches_safe(&sl, max_match, &x, basic_char_cmp, &match_count, (void**)&matches);
+    EXPECT_EQ(0, rc);
+    EXPECT_EQ(0, shmlist_length(&sl));
+    EXPECT_EQ(true, shmlist_is_empty(&sl));
+    EXPECT_EQ(4, match_count);
+    EXPECT_EQ('x', matches[0].key);
+    EXPECT_EQ('x', matches[1].key);
+    EXPECT_EQ('x', matches[2].key);
+    EXPECT_EQ('x', matches[3].key);
+    free(matches);
 
     shmlist_destroy(&sl);
 }

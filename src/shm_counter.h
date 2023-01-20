@@ -22,7 +22,7 @@ extern "C" {
 #endif
 
 /** Number of counters allowed within a set */
-#define SHMCOUNTER_SET_SIZE 96
+#define SHMCOUNTER_SET_SIZE 2048
 
 /** Reserved values that cannot be used within the UID */
 #define SHMCOUNTER_RESERVED_GROUP 0xDEADBEEF
@@ -133,7 +133,7 @@ int shmcounter_value(shmcounter_t* sc);
 bool shmcounter_isvalue(shmcounter_t* sc, int val);
 
 /**
- * Compare two counters for equality counter with mutex safety
+ * Compare two counters for equality with mutex safety
  * @param lhs Counter struct
  * @param rhs Counter struct
  * @return true if the counters have the same value, otherwise false

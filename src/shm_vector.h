@@ -45,6 +45,9 @@ typedef struct shmarray {
 	/* Mutual exclusion lock */
 	shmmutex_t lock;
 	
+	/* A reference count */
+	size_t ref_count;
+
 	/* Number of total buffers allocated */
 	size_t capacity;
 
@@ -74,13 +77,14 @@ typedef struct shmarray {
 int shmvector_create(shmvector_t *sv, const char* segname, size_t elesz, size_t sz);
 
 /**
- * Release resources associated with this shared memory vector. Can be safely called once.
+ * Release resources associated with this shared memory vector. 
+ * Once called this list is destroyed in all instances.
 */
 int shmvector_destroy(shmvector_t *sv);
 
 /**
- * Release resources associated with this shared memory vector if the vector is empty. 
- * Can be safely called by all callers.
+ * Release resources associated with this shared memory vector if the vector is unused. 
+ * Can be safely called with any instance.
 */
 int shmvector_destroy_safe(shmvector_t *sv);
 
@@ -91,9 +95,9 @@ size_t shmvector_size(shmvector_t *sv);
 
 /**
  * @return the index of the element compares equal,
- *         or size+1 if the element does not exist
+ *         or -1 if the element does not exist
  */
-size_t shmvector_find_first_of(shmvector_t *sv, void *data, shmvector_elecmp_fn elecmp);
+int shmvector_find_first_of(shmvector_t *sv, void *data, shmvector_elecmp_fn elecmp);
 
 /**
  * Concurrent safe push_back() function

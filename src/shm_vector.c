@@ -69,6 +69,11 @@ int shmvector_create(shmvector_t *sv, const char* segname, size_t elesz, size_t 
             close(sv->segd);
             rc = 1;
         }
+
+        /* Critical section - increment the reference count */
+        shmmutex_lock(&(sv->shm->lock));
+        sv->shm->ref_count++;
+        shmmutex_unlock(&(sv->shm->lock));
     }
     else {
         /* Initialize the shared memory segement */
@@ -78,6 +83,7 @@ int shmvector_create(shmvector_t *sv, const char* segname, size_t elesz, size_t 
         sv->shm = mmap(0, segsize, PROT_READ|PROT_WRITE, MAP_SHARED, sv->segd, 0);
         if (sv->shm != MAP_FAILED) {
             /* Initialize everything but the mutex */
+            sv->shm->ref_count = 1;
             sv->shm->capacity = sz;
             sv->shm->esize = elesz;
             sv->shm->active_count = 0;
@@ -98,7 +104,7 @@ int shmvector_create(shmvector_t *sv, const char* segname, size_t elesz, size_t 
 
 int shmvector_destroy(shmvector_t *sv) {
     /* Disable the lock */
-    shmmutex_destroy(&sv->shm->lock);
+    int rc = shmmutex_destroy(&sv->shm->lock);
 
     /* Free resources */
     size_t segsize = sizeof(shmarray_t) + (sv->shm->capacity * sv->shm->esize) + 
@@ -106,20 +112,27 @@ int shmvector_destroy(shmvector_t *sv) {
     shm_unlink(sv->segname);
     close(sv->segd);
     munmap(sv->shm, segsize);
+    return rc;
 }
 
 int shmvector_destroy_safe(shmvector_t *sv) {
-    /* Take the lock */
-    fprintf(stderr, "WARNING: shmvector_destroy_safe called. It may not free all resources.\n");
+    /* Take the lock and destroy it if the refcount is 0 */
+    int rc = 0;
     shmmutex_lock(&(sv->shm->lock));
-    shm_unlink(sv->segname);
-    shmmutex_unlock(&(sv->shm->lock));
+    sv->shm->ref_count--;
+    if (0 == sv->shm->ref_count) {
+        shm_unlink(sv->segname);
+        rc = shmmutex_destroy_if_locked(&sv->shm->lock);
+    } else {
+        shmmutex_unlock(&(sv->shm->lock));
+    }
 
     /* Perform local cleanup */
     size_t segsize = sizeof(shmarray_t) + (sv->shm->capacity * sv->shm->esize) + 
         (sv->shm->capacity * sizeof(bool));
     close(sv->segd);
     munmap(sv->shm, segsize);
+    return rc;
 }
 
 /** Return the number of active elements */
@@ -127,22 +140,21 @@ size_t shmvector_size(shmvector_t *sv) {
     return sv->shm->active_count; 
 }
 
-/** Return the element if found, or size+1 if not found */
-size_t shmvector_find_first_of(shmvector_t *sv, void* data, shmvector_elecmp_fn elecmp) {
+/** Return the element if found, or -1 if not found */
+int shmvector_find_first_of(shmvector_t *sv, void* data, shmvector_elecmp_fn elecmp) {
     /* Search for an entry not marked active */
-    size_t last_active_idx = 0;
+    int found_idx = -1;
+    bool* actives = shmarray_get_actives(sv->shm);
+    void* eles = shmarray_get_eles(sv->shm);
     for (int i = 0; i < sv->shm->capacity; i++) {
-        bool* actives = shmarray_get_actives(sv->shm);
         if (true == actives[i]) {
-            last_active_idx = i+1;
-            void* eles = shmarray_get_eles(sv->shm);
             if (0 == elecmp(data, eles + (i * sv->shm->esize))) {
-                last_active_idx = i;
+                found_idx = i;
                 break;
             }
         }
     }
-    return last_active_idx;   
+    return found_idx;   
 }
 
 /** Add an element to the array with thread-safety */

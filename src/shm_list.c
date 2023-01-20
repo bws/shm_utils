@@ -22,10 +22,8 @@ typedef struct shmlist_element {
 } shmlist_ele_t;
 
 /* Return the data within vector element */
-static void* shmlist_ele_get_data(void* v_ele) {
-    shmlist_ele_t *ele = v_ele;
-    ele->data_unsafe = v_ele + sizeof(shmlist_ele_t);
-    return (v_ele + sizeof(shmlist_ele_t));
+static void* shmlist_ele_get_data(shmlist_ele_t* ele) {
+    return (ele + 1);
 }
 
 static inline size_t shmlist_get_next_idx(shmlist_t *sl, size_t idx) {
@@ -65,18 +63,22 @@ static void shmlist_create_tail(shmlist_t *sl, size_t idx, void *ntail, void *el
 /* Fill a buffer with the element from the list node */
 static void* shmlist_copy_data(shmlist_t* sl, void* ele, shmlist_ele_t* node) {
     if (NULL != ele) {
-        size_t elesz = sl->v->shm->esize - sizeof(shmlist_ele_t);
-        memcpy(ele, shmlist_ele_get_data(node), elesz);
+        size_t data_sz = sl->v->shm->esize - sizeof(shmlist_ele_t);
+        fprintf(stderr, "Copying list data: %p %p %d %d %d\n", ele, shmlist_ele_get_data(node), 
+                sl->v->shm->esize,
+                sizeof(shmlist_ele_t), 
+                data_sz);
+        memcpy(ele, shmlist_ele_get_data(node), data_sz);
     }
     return ele;
 }
 
 /* Allocate and fill the buffer with the element from the list node */
 static void* shmlist_malloc_copy_data(shmlist_t* sl, shmlist_ele_t* node) {
-    size_t elesz = sl->v->shm->esize - sizeof(shmlist_ele_t);
-    void* ele = malloc(elesz);
+    size_t data_sz = sl->v->shm->esize - sizeof(shmlist_ele_t);
+    void* ele = malloc(data_sz);
     if (NULL != ele) {
-        memcpy(ele, shmlist_ele_get_data(node), elesz);
+        memcpy(ele, shmlist_ele_get_data(node), data_sz);
     }
     return ele;
 }
@@ -216,7 +218,7 @@ int shmlist_extract_first_match_safe(shmlist_t *sl, void* cmpvalue, shmlist_elec
 
     int rc = 1;
     shmmutex_lock(&(sl->v->shm->lock));
-    size_t iter = shmlist_head(sl)->cur_idx_unsafe;
+    size_t iter = shmlist_get_next_idx(sl, 0);
     while (iter != 0) {
         shmlist_ele_t *item = shmvector_at(sl->v, iter);
         void* idata = shmlist_ele_get_data(item);
@@ -249,7 +251,7 @@ int shmlist_extract_n_matches_safe(shmlist_t *sl, size_t match_max, void *cmpval
     size_t match_cnt = 0;
 
     shmmutex_lock(&(sl->v->shm->lock));
-    size_t iter = shmlist_head(sl)->cur_idx_unsafe;
+    size_t iter = shmlist_get_next_idx(sl, 0);
     while (iter != 0 && match_cnt < match_max) {
         shmlist_ele_t *item = shmvector_at(sl->v, iter);
         void* idata = shmlist_ele_get_data(item);
@@ -264,10 +266,12 @@ int shmlist_extract_n_matches_safe(shmlist_t *sl, size_t match_max, void *cmpval
     /* Extract the matches if any exist*/
     *elecnt = match_cnt;
     if (*elecnt > 0) {
-        *ele = calloc(*elecnt, sl->v->shm->esize - sizeof(shmlist_ele_t));
+        size_t data_sz = sl->v->shm->esize - sizeof(shmlist_ele_t);
+        *ele = calloc(*elecnt, data_sz);
         for (int i = 0; i < *elecnt; i++) {
             shmlist_ele_t *item = shmvector_at(sl->v, idx_matches[i]);
-            shmlist_copy_data(sl, (*ele) + i, item);
+            size_t data_offset = sl->v->shm->esize - sizeof(shmlist_ele_t);
+            shmlist_copy_data(sl, (*ele) + (i*data_offset), item);
 
             /* Splice out the matched item */
             shmlist_set_next_idx(sl, item->prev_idx, item->next_idx);
@@ -323,8 +327,8 @@ shmlist_t* shmlist_prev(shmlist_t *sl) {
 
 /* return a pointer to the list inside the data */
 void* shmlist_get_data(shmlist_t *sl) {
-    void *v_ele = shmvector_at(sl->v, sl->cur_idx_unsafe);
-    void *ele_data = shmlist_ele_get_data(v_ele);
+    shmlist_ele_t *ele = shmvector_at(sl->v, sl->cur_idx_unsafe);
+    void *ele_data = shmlist_ele_get_data(ele);
     return ele_data;
 }
 /* Insert a copy of ele after this list ptr */

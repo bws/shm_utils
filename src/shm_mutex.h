@@ -57,6 +57,14 @@ int shmmutex_create(shmmutex_t *sm);
 int shmmutex_destroy(shmmutex_t *sm);
 
 /** 
+ * Destroy a locked mutex. The shared mutex cannot be used by anyone after this call.
+ * 
+ * @param sm pointer to the mutex data
+ * @return 0 on success
+ */
+int shmmutex_destroy_if_locked(shmmutex_t *sm);
+
+/** 
  * On success a single process holds the lock 
  * 
  * @param sm pointer to the mutex data

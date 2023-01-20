@@ -393,9 +393,9 @@ TEST(shmvector, find_first_of_basic) {
 	EXPECT_EQ(2, shmvector_find_first_of(&sv, &ele2, test_charcmp));
 	EXPECT_EQ(3, shmvector_find_first_of(&sv, &ele3, test_charcmp));
 
-	// A non-existant element should come back as last_idx + 1
+	// A non-existant element should come back as -1
 	char nonele = 'f';
-	EXPECT_EQ(4, shmvector_find_first_of(&sv, &nonele, test_charcmp));
+	EXPECT_EQ(-1, shmvector_find_first_of(&sv, &nonele, test_charcmp));
 
 	shmvector_destroy(&sv);
 }
@@ -440,7 +440,17 @@ TEST(shmvector, find_first_of_double) {
 
 	// A non-existant element should come back as last_idx + 1
 	double nonele = 999.999;
-	EXPECT_EQ(4, shmvector_find_first_of(&sv, &nonele, test_dblcmp));
+	EXPECT_EQ(-1, shmvector_find_first_of(&sv, &nonele, test_dblcmp));
+
+	// Now delete all elements and search for them
+	shmvector_del(&sv, 0);
+	shmvector_del(&sv, 1);
+	shmvector_del(&sv, 2);
+	shmvector_del(&sv, 3);
+	EXPECT_EQ(-1, shmvector_find_first_of(&sv, &ele0, test_dblcmp));
+	EXPECT_EQ(-1, shmvector_find_first_of(&sv, &ele1, test_dblcmp));
+	EXPECT_EQ(-1, shmvector_find_first_of(&sv, &ele2, test_dblcmp));
+	EXPECT_EQ(-1, shmvector_find_first_of(&sv, &ele3, test_dblcmp));
 
 	shmvector_destroy(&sv);
 }

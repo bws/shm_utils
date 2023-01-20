@@ -55,6 +55,29 @@ int shmmutex_destroy(shmmutex_t *sm) {
     return 0;
 }
 
+/* Destroy a locked mutex. */
+int shmmutex_destroy_if_locked(shmmutex_t *sm) {
+    /* Ensure the lock is held and then set it to NOTREADY */
+    int rc = 0;
+    long s;
+
+    /* If the futex is taken, set it to notready */
+    const uint32_t taken = SHMMUTEX_LOCK_TAKEN;
+    if (atomic_compare_exchange_strong(&(sm->val), &taken, SHMMUTEX_LOCK_NOTREADY)) {
+        /* We destroyed the futex, notify processes that may be sleep-waiting */
+        s = futex(&sm->val, FUTEX_WAKE, SHMMUTEX_LOCK_NOTREADY, NULL, NULL, 0);
+        if (s  == -1) {
+            fprintf(stderr, "ERROR: Failure waking after destroying lock\n");
+            rc = 1;
+        }
+    }
+    else {
+        /* The lock was not in the taken state, return an error */
+        rc = 1;
+    }
+    return rc;
+}
+
 int shmmutex_lock(shmmutex_t *sm) {
 
      /* atomic_compare_exchange_strong(ptr, oldval, newval)
