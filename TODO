@@ -1,0 +1,3 @@
+1. Support dynamic re-sizing for the vector type.
+2. Create two new mutex types, spin_lock and sleep_lock to support OpenFAM-based backing stores.
+3. Support OpenFAM-based backing stores in addition to shmopen()-based backing stores.
